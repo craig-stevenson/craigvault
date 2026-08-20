@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CraigVault — password-protected text</title>
+<style>
+  :root{
+    --bg:#14181d; --panel:#1b2128; --panel-2:#20272f; --line:#2a323c;
+    --text:#d8dee6; --dim:#8a95a3; --brass:#c9a227; --brass-hi:#e0b93e;
+    --danger:#d06a5a; --ok:#7fb07a;
+    --mono:"Cascadia Code","Consolas","Courier New",monospace;
+    --ui:"Segoe UI","Segoe UI Variable Text",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--ui);display:flex;flex-direction:column}
+
+  /* ---------- top bar ---------- */
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:14px;letter-spacing:.06em;color:var(--brass)}
+  .brand svg{flex:none}
+  .spacer{flex:1}
+  button{font-family:var(--ui);font-size:13px;color:var(--text);background:var(--panel-2);border:1px solid var(--line);
+    border-radius:4px;padding:6px 12px;cursor:pointer}
+  button:hover{border-color:var(--brass);color:var(--brass-hi)}
+  button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+  button.primary{background:var(--brass);border-color:var(--brass);color:#14181d;font-weight:600}
+  button.primary:hover{background:var(--brass-hi);border-color:var(--brass-hi);color:#14181d}
+  button:disabled{opacity:.4;cursor:default}
+  button:disabled:hover{border-color:var(--line);color:var(--text)}
+  select{font-size:12px;background:var(--panel-2);color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:5px 6px}
+  .filename{font-family:var(--mono);font-size:12px;color:var(--dim);max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dirty{color:var(--brass)}
+
+  /* ---------- editor ---------- */
+  main{flex:1;display:flex;position:relative;min-height:0}
+  textarea{flex:1;resize:none;border:0;background:var(--bg);color:var(--text);
+    font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px;caret-color:var(--brass-hi)}
+  textarea::placeholder{color:#4a5560}
+  textarea:focus{outline:none}
+
+  /* locked overlay */
+  .lockscreen{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:24px;text-align:center}
+  .lockscreen.show{display:flex}
+  .cipherwall{position:absolute;inset:0;overflow:hidden;font-family:var(--mono);font-size:13px;line-height:1.8;
+    color:#333d48;white-space:pre-wrap;word-break:break-all;padding:22px 26px;user-select:none;pointer-events:none}
+  .lockcard{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:28px 32px;min-width:min(340px,90vw);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .lockcard h2{font-family:var(--mono);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--brass);margin:10px 0 4px}
+  .lockcard p{font-size:12.5px;color:var(--dim);margin-bottom:16px}
+  .lockcard form{display:flex;gap:8px}
+  input[type=password],input[type=text]{flex:1;font-family:var(--mono);font-size:13px;background:var(--bg);color:var(--text);
+    border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+  .err{color:var(--danger);font-size:12px;min-height:16px;margin-top:10px;text-align:left}
+
+  /* ---------- password modal ---------- */
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:26px 28px;min-width:min(360px,92vw)}
+  dialog::backdrop{background:rgba(10,13,16,.72)}
+  dialog h2{font-family:var(--mono);font-weight:400;font-size:14px;letter-spacing:.08em;color:var(--brass);margin-bottom:4px}
+  dialog p{font-size:12.5px;color:var(--dim);margin-bottom:14px}
+  dialog label{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}
+  dialog input{width:100%}
+  .meter{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+  .meter div{height:100%;width:0;background:var(--danger);transition:width .2s,background .2s}
+  .row{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+  /* ---------- status bar ---------- */
+  footer{display:flex;gap:18px;align-items:center;padding:6px 14px;background:var(--panel);border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .state{display:flex;align-items:center;gap:6px}
+  .pip{width:7px;height:7px;border-radius:50%;background:var(--danger)}
+  .pip.open{background:var(--ok)}
+  footer .spec{margin-left:auto;letter-spacing:.04em}
+
+  @media (max-width:640px){
+    header{flex-wrap:wrap}
+    .filename{display:none}
+    footer .spec{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <rect x="4" y="10" width="16" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+    </svg>
+    CRAIGVAULT
+  </div>
+  <span id="fname" class="filename">untitled</span>
+  <div class="spacer"></div>
+  <button id="btnNew">New</button>
+  <button id="btnOpen">Open</button>
+  <button id="btnSave" class="primary">Save</button>
+  <button id="btnSaveAs">Save as</button>
+  <button id="btnLock" disabled>Lock now</button>
+  <select id="autolock" title="Auto-lock after inactivity">
+    <option value="0">Auto-lock: off</option>
+    <option value="60">Auto-lock: 1 min</option>
+    <option value="300" selected>Auto-lock: 5 min</option>
+    <option value="900">Auto-lock: 15 min</option>
+  </select>
+</header>
+
+<main>
+  <textarea id="editor" spellcheck="false" autocomplete="off"
+    placeholder="Type here. Nothing touches disk until you save — and what's saved is AES-256-GCM ciphertext only."></textarea>
+
+  <div id="lockscreen" class="lockscreen" aria-live="polite">
+    <div id="cipherwall" class="cipherwall" aria-hidden="true"></div>
+    <div class="lockcard">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c9a227" stroke-width="1.6" aria-hidden="true">
+        <rect x="4" y="10" width="16" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6"/>
+      </svg>
+      <h2>LOCKED</h2>
+      <p>The text above is what this document looks like at rest.</p>
+      <form id="unlockForm">
+        <input type="password" id="unlockPw" placeholder="Password" autocomplete="off" aria-label="Password">
+        <button class="primary" type="submit">Unlock</button>
+      </form>
+      <div id="unlockErr" class="err" role="alert"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span class="state"><span id="pip" class="pip"></span><span id="stateTxt">no document</span></span>
+  <span id="counts">0 chars</span>
+  <span class="spec">AES-256-GCM · PBKDF2-SHA256 · 600,000 iter · local only</span>
+</footer>
+
+<!-- set / change password -->
+<dialog id="pwDialog">
+  <h2 id="pwTitle">SET PASSWORD</h2>
+  <p id="pwHint">This password encrypts the file. There is no recovery if you forget it.</p>
+  <form method="dialog" id="pwForm">
+    <label for="pw1">Password</label>
+    <input type="password" id="pw1" autocomplete="new-password">
+    <div class="meter"><div id="meterBar"></div></div>
+    <label for="pw2">Confirm password</label>
+    <input type="password" id="pw2" autocomplete="new-password">
+    <div id="pwErr" class="err"></div>
+    <div class="row">
+      <button type="button" id="pwCancel">Cancel</button>
+      <button class="primary" value="ok" id="pwOk">Encrypt &amp; continue</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- password prompt for opening a file -->
+<dialog id="openDialog">
+  <h2>ENTER PASSWORD</h2>
+  <p id="openName" style="font-family:var(--mono)"></p>
+  <form method="dialog" id="openForm">
+    <input type="password" id="openPw" autocomplete="off" placeholder="Password" aria-label="Password">
+    <div id="openErr" class="err"></div>
+    <div class="row">
+      <button type="button" id="openCancel">Cancel</button>
+      <button class="primary" value="ok">Decrypt</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+/* ================= crypto core =================
+   File format:  "SECTXT1" (7B) | salt (16B) | IV (12B) | AES-GCM ciphertext(+tag)
+*/
+const MAGIC = new TextEncoder().encode("SECTXT1");
+const ITER = 600000;
+
+async function deriveKey(password, salt){
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt, iterations:ITER, hash:"SHA-256"},
+    base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function encryptText(text, password){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const ct   = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(text)));
+  const out  = new Uint8Array(MAGIC.length + 16 + 12 + ct.length);
+  out.set(MAGIC,0); out.set(salt,MAGIC.length); out.set(iv,MAGIC.length+16); out.set(ct,MAGIC.length+28);
+  return out;
+}
+async function decryptBytes(bytes, password){
+  const m = bytes.slice(0, MAGIC.length);
+  if (m.length !== MAGIC.length || m.some((b,i)=>b!==MAGIC[i])) throw new Error("format");
+  const salt = bytes.slice(MAGIC.length, MAGIC.length+16);
+  const iv   = bytes.slice(MAGIC.length+16, MAGIC.length+28);
+  const ct   = bytes.slice(MAGIC.length+28);
+  const key  = await deriveKey(password, salt);
+  const pt   = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct); // throws on wrong pw / tamper
+  return new TextDecoder().decode(pt);
+}
+
+/* ================= app state ================= */
+const editor = document.getElementById("editor");
+const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnLock","autolock",
+  "lockscreen","cipherwall","unlockForm","unlockPw","unlockErr","pip","stateTxt","counts",
+  "pwDialog","pwTitle","pwHint","pwForm","pw1","pw2","pwErr","pwCancel",
+  "openDialog","openName","openForm","openPw","openErr","openCancel"].map(id=>[id,document.getElementById(id)]));
+
+let password = null;        // current document password (memory only)
+let fileHandle = null;      // FS Access API handle when available
+let fileName = "untitled";
+let dirty = false;
+let locked = false;
+let lockedBlob = null;      // ciphertext of the session while locked
+let idleTimer = null;
+
+const hasFS = "showSaveFilePicker" in window;
+
+function setDirty(v){ dirty = v; render(); }
+function render(){
+  els.fname.textContent = fileName + (dirty ? " •" : "");
+  els.fname.classList.toggle("dirty", dirty);
+  els.pip.className = "pip" + (password && !locked ? " open" : "");
+  els.stateTxt.textContent = locked ? "locked" : (password ? "unlocked" : "no password set");
+  els.counts.textContent = editor.value.length + " chars";
+  els.btnLock.disabled = !password || locked;
+}
+
+/* ================= password dialogs ================= */
+function askNewPassword(title){
+  return new Promise(resolve=>{
+    els.pwTitle.textContent = title;
+    els.pw1.value = els.pw2.value = ""; els.pwErr.textContent = ""; meter("");
+    els.pwDialog.showModal(); els.pw1.focus();
+    const done = val=>{ els.pwDialog.close(); cleanup(); resolve(val); };
+    const submit = e=>{
+      e.preventDefault();
+      if (els.pw1.value.length < 1){ els.pwErr.textContent = "Password can't be empty."; return; }
+      if (els.pw1.value !== els.pw2.value){ els.pwErr.textContent = "Passwords don't match."; return; }
+      done(els.pw1.value);
+    };
+    const cancel = ()=>done(null);
+    const cleanup = ()=>{ els.pwForm.removeEventListener("submit",submit); els.pwCancel.removeEventListener("click",cancel); };
+    els.pwForm.addEventListener("submit", submit);
+    els.pwCancel.addEventListener("click", cancel);
+  });
+}
+function meter(v){
+  const bar = document.getElementById("meterBar");
+  let s = 0;
+  if (v.length >= 8) s++; if (v.length >= 14) s++;
+  if (/[a-z]/.test(v) && /[A-Z]/.test(v)) s++;
+  if (/\d/.test(v)) s++; if (/[^A-Za-z0-9]/.test(v)) s++;
+  bar.style.width = (s/5*100) + "%";
+  bar.style.background = s <= 2 ? "var(--danger)" : s <= 3 ? "var(--brass)" : "var(--ok)";
+}
+els.pw1.addEventListener("input", e=>meter(e.target.value));
+
+function askOpenPassword(name, errMsg = ""){
+  return new Promise(resolve=>{
+    els.openName.textContent = name;
+    els.openPw.value = ""; els.openErr.textContent = errMsg;
+    els.openDialog.showModal(); els.openPw.focus();
+    const done = val=>{ els.openDialog.close(); cleanup(); resolve(val); };
+    const submit = e=>{ e.preventDefault(); done(els.openPw.value); };
+    const cancel = ()=>done(null);
+    const cleanup = ()=>{ els.openForm.removeEventListener("submit",submit); els.openCancel.removeEventListener("click",cancel); };
+    els.openForm.addEventListener("submit", submit);
+    els.openCancel.addEventListener("click", cancel);
+  });
+}
+
+/* ================= file ops ================= */
+async function doSave(as=false){
+  if (locked) return;
+  if (!password){
+    const pw = await askNewPassword("SET PASSWORD");
+    if (pw === null) return;
+    password = pw;
+  }
+  const bytes = await encryptText(editor.value, password);
+  try{
+    if (hasFS){
+      if (!fileHandle || as){
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName.endsWith(".sectxt") ? fileName : "secrets.sectxt",
+          types:[{description:"CraigVault encrypted text", accept:{"application/octet-stream":[".sectxt"]}}]
+        });
+      }
+      const w = await fileHandle.createWritable();
+      await w.write(bytes); await w.close();
+      fileName = fileHandle.name;
+    } else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes],{type:"application/octet-stream"}));
+      a.download = fileName.endsWith(".sectxt") ? fileName : "secrets.sectxt";
+      a.click(); URL.revokeObjectURL(a.href);
+    }
+    setDirty(false);
+  }catch(e){ if (e.name !== "AbortError") alert("Save failed: " + e.message); }
+  render();
+}
+
+async function doOpen(){
+  let bytes, name;
+  try{
+    if (hasFS){
+      const [h] = await window.showOpenFilePicker({
+        types:[{description:"CraigVault encrypted text", accept:{"application/octet-stream":[".sectxt"]}}]
+      });
+      const f = await h.getFile();
+      bytes = new Uint8Array(await f.arrayBuffer());
+      name = f.name; fileHandle = h;
+    } else {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".sectxt";
+      const f = await new Promise(res=>{ inp.onchange = ()=>res(inp.files[0]); inp.click(); });
+      if (!f) return;
+      bytes = new Uint8Array(await f.arrayBuffer());
+      name = f.name; fileHandle = null;
+    }
+  }catch(e){ if (e.name !== "AbortError") alert("Open failed: " + e.message); return; }
+
+  // password loop — reprompts with an error message until correct or cancelled
+  let errMsg = "";
+  while (true){
+    const pw = await askOpenPassword(name, errMsg);
+    if (pw === null) return;
+    try{
+      const text = await decryptBytes(bytes, pw);
+      password = pw; fileName = name;
+      editor.value = text; locked = false; lockedBlob = null;
+      hideLock(); setDirty(false); resetIdle();
+      return;
+    }catch(err){
+      errMsg = err.message === "format"
+        ? "Not a CraigVault file (bad header)."
+        : "Incorrect password, or the file was modified.";
+    }
+  }
+}
+
+function doNew(){
+  if (dirty && !confirm("Discard unsaved changes?")) return;
+  editor.value = ""; password = null; fileHandle = null; fileName = "untitled";
+  locked = false; lockedBlob = null; hideLock(); setDirty(false);
+}
+
+/* ================= lock / unlock ================= */
+function cipherNoise(n){
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  let s = ""; const r = crypto.getRandomValues(new Uint8Array(n));
+  for (let i=0;i<n;i++) s += chars[r[i] % chars.length];
+  return s;
+}
+async function doLock(){
+  if (!password || locked) return;
+  lockedBlob = await encryptText(editor.value, password);   // preserve unsaved edits, encrypted
+  const approxLen = Math.min(Math.max(editor.value.length * 1.4, 400), 4000);
+  editor.value = "";                                        // wipe plaintext
+  locked = true;
+  els.cipherwall.textContent = cipherNoise(Math.floor(approxLen));
+  els.unlockPw.value = ""; els.unlockErr.textContent = "";
+  els.lockscreen.classList.add("show");
+  els.unlockPw.focus();
+  render();
+}
+async function doUnlock(pw){
+  try{
+    const text = await decryptBytes(lockedBlob, pw);
+    editor.value = text; lockedBlob = null; locked = false;
+    hideLock(); resetIdle(); render(); editor.focus();
+  }catch(_){
+    els.unlockErr.textContent = "Incorrect password.";
+    els.unlockPw.value = ""; els.unlockPw.focus();
+  }
+}
+function hideLock(){ els.lockscreen.classList.remove("show"); els.cipherwall.textContent = ""; }
+
+els.unlockForm.addEventListener("submit", e=>{ e.preventDefault(); doUnlock(els.unlockPw.value); });
+
+/* ================= idle auto-lock ================= */
+function resetIdle(){
+  clearTimeout(idleTimer);
+  const secs = parseInt(els.autolock.value, 10);
+  if (secs > 0 && password && !locked) idleTimer = setTimeout(doLock, secs * 1000);
+}
+["keydown","mousedown","input","scroll","touchstart"].forEach(ev=>document.addEventListener(ev, resetIdle, {passive:true}));
+els.autolock.addEventListener("change", resetIdle);
+
+/* ================= wiring ================= */
+els.btnNew.addEventListener("click", doNew);
+els.btnOpen.addEventListener("click", doOpen);
+els.btnSave.addEventListener("click", ()=>doSave(false));
+els.btnSaveAs.addEventListener("click", ()=>doSave(true));
+els.btnLock.addEventListener("click", doLock);
+editor.addEventListener("input", ()=>{ setDirty(true); });
+
+document.addEventListener("keydown", e=>{
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="s"){ e.preventDefault(); doSave(e.shiftKey); }
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="o"){ e.preventDefault(); doOpen(); }
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="l"){ e.preventDefault(); doLock(); }
+});
+window.addEventListener("beforeunload", e=>{ if (dirty){ e.preventDefault(); e.returnValue = ""; } });
+
+render();
+</script>
+</body>
+</html>

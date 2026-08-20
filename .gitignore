@@ -1,0 +1,17 @@
+# Encrypted documents — never commit user data
+*.sectxt
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Tooling / local servers
+node_modules/
+.cache/
