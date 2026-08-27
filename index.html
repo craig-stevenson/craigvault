@@ -516,7 +516,10 @@ function render(){
     : "no password · auto-lock off";
   els.counts.textContent = locked ? "—" : editor.value.length + " chars";
   els.btnLock.disabled = busy || !password || locked;
-  els.btnLock.title = password
+  // password is null while locked, so check locked first or the tooltip misreads the state
+  els.btnLock.title = locked
+    ? "Already locked — enter the password to unlock"
+    : password
     ? "Lock now (Ctrl/⌘+L)"
     : "Save with a password first — locking needs a key to re-encrypt with";
   for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy;
@@ -544,13 +547,21 @@ function flash(msg, kind = ""){
 }
 
 /* ================= password dialogs ================= */
+// An <input> keeps its value after its dialog closes, so clearing on entry is not enough: the
+// plaintext password would sit in the DOM until the next open. Every exit path wipes instead.
+const wipeField = input => { input.value = ""; };
+
 function askNewPassword(title){
   return new Promise(resolve=>{
     els.pwTitle.textContent = title;
     els.pw1.value = els.pw2.value = ""; els.pwErr.textContent = ""; meter("");
     hideReveal(els.pw1, els.revealPw1); els.capsPw.classList.remove("show"); els.capsPw.textContent = "";
     els.pwDialog.showModal(); els.pw1.focus();
-    const done = val=>{ els.pwDialog.close(); cleanup(); resolve(val); };
+    const done = val=>{
+      els.pwDialog.close(); cleanup();
+      wipeField(els.pw1); wipeField(els.pw2); meter("");   // val is already evaluated, so this cannot corrupt it
+      resolve(val);
+    };
     const submit = e=>{
       e.preventDefault();
       if (els.pw1.value.length < 1){ els.pwErr.textContent = "Password can't be empty."; return; }
@@ -581,7 +592,7 @@ function askOpenPassword(name, errMsg = ""){
     els.openPw.value = ""; els.openErr.textContent = errMsg;
     hideReveal(els.openPw, els.revealOpen); els.capsOpen.classList.remove("show"); els.capsOpen.textContent = "";
     els.openDialog.showModal(); els.openPw.focus();
-    const done = val=>{ els.openDialog.close(); cleanup(); resolve(val); };
+    const done = val=>{ els.openDialog.close(); cleanup(); wipeField(els.openPw); resolve(val); };
     const submit = e=>{ e.preventDefault(); done(els.openPw.value); };
     const cancel = ()=>done(null);
     const cleanup = ()=>{ els.openForm.removeEventListener("submit",submit); els.openCancel.removeEventListener("click",cancel); };
@@ -777,6 +788,10 @@ async function doLock(){
   }finally{ busy = false; render(); }
   const approxLen = editor.value.length * 1.4;
   editor.value = "";                                        // wipe plaintext
+  // Drop the key too. Reached only after encryptText succeeded, so lockedBlob holds the session
+  // and doUnlock re-adopts the password on the next successful decrypt. Locking with the key still
+  // in a live binding left `doUnlock(password)` as a one-line bypass of the lockscreen.
+  password = null;
   locked = true;
   showLock(approxLen);
   render();
@@ -795,10 +810,12 @@ async function doUnlock(pw){
   busy = true; progress = -1; els.unlockBtn.disabled = true; els.unlockBtn.textContent = "Unlocking…"; render();
   try{
     const text = await decryptBytes(lockedBlob, pw, setProgress);
-    // a successful GCM decrypt proves pw is the password — needed when booting straight into
-    // the lockscreen, and a no-op reassignment on the ordinary lock/unlock path
+    // A successful GCM decrypt proves pw is the password. This is the only place the key is
+    // adopted: boot() and doLock both leave `password` null, so every locked state re-derives
+    // from what the user typed rather than reusing a key held across the lock.
     password = pw;
     editor.value = text; lockedBlob = null; locked = false;
+    wipeField(els.unlockPw);                                // success path; the catch below clears it too
     hideLock(); resetIdle(); editor.focus();
   }catch(_){
     els.unlockErr.textContent = "Incorrect password.";

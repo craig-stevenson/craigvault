@@ -12,7 +12,7 @@ In scope: flaws in the encryption, key derivation, file format, or lock/unlock l
 
 Out of scope (documented limits, not bugs — see the security notes in the README):
 
-- Plaintext or password remaining in browser memory while a document is unlocked
+- Plaintext or password remaining in browser memory while a document is unlocked. Locking discards the key and clears every password field, so this covers the unlocked state; a *locked* session that still exposes the key or the plaintext is in scope.
 - OS-level attacks such as memory dumps, swap files, or keyloggers
 - Weak user-chosen passwords
 - The `SECTXT2` header, and the HTML shell around it, identifying a file as a CraigVault vault

@@ -16,7 +16,7 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 - **Memory-hard by design** — scrypt forces an attacker to commit 32 MB per password guess, which is what actually defeats GPU and ASIC cracking
 - **Versioned format** — KDF parameters live in the file, so costs can be raised later without breaking vaults you already saved
 - **Authenticated** — a modified file fails to decrypt rather than yielding garbage
-- **Idle auto-lock** (off / 1 / 5 / 15 minutes) that wipes plaintext from the DOM and re-encrypts unsaved edits in memory
+- **Idle auto-lock** (off / 1 / 5 / 15 minutes) that wipes plaintext from the DOM, re-encrypts unsaved edits in memory, and discards the key — unlocking derives it from your password again
 - **Manual lock** with `Ctrl+L`, showing a ciphertext-style wall instead of your text
 - **Self-contained vaults** — one `.html` holds the app and the encrypted document; double-click to open
 - **File System Access API** support for true in-place saves, with a download fallback on browsers that lack it
@@ -85,7 +85,7 @@ Legacy `.sectxt` files — the raw payload, from before the data moved into the 
 CraigVault is a small, auditable tool — the entire implementation is a few dozen lines in [index.html](index.html) — but it has not been through a third-party security audit. Read the code before trusting it with anything that matters. Known limits:
 
 - **Browser memory is not secure storage.** While unlocked, the plaintext and password sit in JS strings that cannot be reliably zeroed and may be swapped to disk by the OS.
-- **Locking wipes the textarea, not the process.** Auto-lock is a shoulder-surfing and walk-away defense, not protection against an attacker with memory access on the machine.
+- **Locking wipes the textarea and drops the key, but not the process.** Locking discards the in-memory password, so unlocking has to derive the key from what you type — there is no live key sitting behind the lockscreen for a script or a console to reuse. What it cannot do is scrub strings the garbage collector has already released, so auto-lock remains a shoulder-surfing and walk-away defense, not protection against an attacker who can dump the process memory.
 - **The password is the whole security boundary.** scrypt at 32 MB makes offline guessing far more expensive than PBKDF2 did — an attacker's GPU can no longer run thousands of guesses in parallel for free — but a weak password is still a weak password. Use a long passphrase.
 - **Unlocking takes about a quarter of a second.** That cost is deliberate: it is paid once by you and once per guess by an attacker.
 - **No plausible deniability.** A vault is plainly a CraigVault file: the HTML shell and the `SECTXT2` header both identify it as an encrypted document.
