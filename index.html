@@ -8,7 +8,7 @@
   :root{
     --bg:#14181d; --panel:#1b2128; --panel-2:#20272f; --line:#2a323c;
     --text:#d8dee6; --dim:#8a95a3; --brass:#c9a227; --brass-hi:#e0b93e;
-    --danger:#d06a5a; --ok:#7fb07a;
+    --danger:#d06a5a; --ok:#7fb07a; --placeholder:#7a8593;
     --mono:"Cascadia Code","Consolas","Courier New",monospace;
     --ui:"Segoe UI","Segoe UI Variable Text",system-ui,sans-serif;
   }
@@ -21,12 +21,16 @@
   .brand{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:14px;letter-spacing:.06em;color:var(--brass)}
   .brand svg{flex:none}
   .spacer{flex:1}
+  .actions{display:flex;align-items:center;gap:8px}
   button{font-family:var(--ui);font-size:13px;color:var(--text);background:var(--panel-2);border:1px solid var(--line);
     border-radius:4px;padding:6px 12px;cursor:pointer}
   button:hover{border-color:var(--brass);color:var(--brass-hi)}
   button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
   button.primary{background:var(--brass);border-color:var(--brass);color:#14181d;font-weight:600}
   button.primary:hover{background:var(--brass-hi);border-color:var(--brass-hi);color:#14181d}
+  /* destructive confirmations: don't dress the losing-your-work button up as the happy path */
+  button.danger{background:none;border-color:var(--danger);color:var(--danger);font-weight:600}
+  button.danger:hover{background:var(--danger);border-color:var(--danger);color:#14181d}
   button:disabled{opacity:.4;cursor:default}
   button:disabled:hover{border-color:var(--line);color:var(--text)}
   select{font-size:12px;background:var(--panel-2);color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:5px 6px}
@@ -35,9 +39,9 @@
 
   /* ---------- editor ---------- */
   main{flex:1;display:flex;position:relative;min-height:0}
-  textarea{flex:1;resize:none;border:0;background:var(--bg);color:var(--text);
+  textarea{flex:1;width:100%;max-width:90ch;margin:0 auto;resize:none;border:0;background:var(--bg);color:var(--text);
     font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px;caret-color:var(--brass-hi)}
-  textarea::placeholder{color:#4a5560}
+  textarea::placeholder{color:var(--placeholder)}
   textarea:focus{outline:none}
 
   /* locked overlay */
@@ -48,21 +52,37 @@
   .lockcard{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:28px 32px;min-width:min(340px,90vw);box-shadow:0 12px 40px rgba(0,0,0,.5)}
   .lockcard h2{font-family:var(--mono);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--brass);margin:10px 0 4px}
   .lockcard p{font-size:12.5px;color:var(--dim);margin-bottom:16px}
+  .lockcard .meta{font-family:var(--mono);font-size:11.5px;margin:-10px 0 16px}
   .lockcard form{display:flex;gap:8px}
-  input[type=password],input[type=text]{flex:1;font-family:var(--mono);font-size:13px;background:var(--bg);color:var(--text);
-    border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+  .lockcard .pwfield{flex:1}
+  .lockcard .caption{font-size:11px;color:#5c6672;margin:14px 0 0;line-height:1.5}
+  input[type=password],input[type=text]{width:100%;font-family:var(--mono);font-size:13px;background:var(--bg);color:var(--text);
+    border:1px solid var(--line);border-radius:4px;padding:8px 34px 8px 10px}
   .err{color:var(--danger);font-size:12px;min-height:16px;margin-top:10px;text-align:left}
 
+  /* ---------- password field with reveal ---------- */
+  .pwfield{position:relative;display:block}
+  .reveal{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:4px;line-height:0;
+    background:none;border:0;border-radius:3px;color:var(--dim)}
+  .reveal:hover{background:none;color:var(--brass-hi)}
+  .reveal svg{display:block;pointer-events:none}
+  .caps{display:none;align-items:center;gap:5px;font-size:11.5px;color:var(--brass);margin-top:6px;text-align:left}
+  .caps.show{display:flex}
+
   /* ---------- password modal ---------- */
-  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:26px 28px;min-width:min(360px,92vw)}
+  /* margin:auto restores the UA centring that the `*{margin:0}` reset above kills */
+  dialog{margin:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:26px 28px;min-width:min(360px,92vw)}
   dialog::backdrop{background:rgba(10,13,16,.72)}
   dialog h2{font-family:var(--mono);font-weight:400;font-size:14px;letter-spacing:.08em;color:var(--brass);margin-bottom:4px}
   dialog p{font-size:12.5px;color:var(--dim);margin-bottom:14px}
   dialog label{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}
   dialog input{width:100%}
-  .meter{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+  .meterwrap{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .meter{flex:1;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
   .meter div{height:100%;width:0;background:var(--danger);transition:width .2s,background .2s}
+  .meterTxt{font-size:11px;color:var(--dim);min-width:5ch;text-align:right}
   .row{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+  dialog .body{font-size:12.5px;color:var(--dim);line-height:1.55}
 
   /* ---------- status bar ---------- */
   footer{display:flex;gap:18px;align-items:center;padding:6px 14px;background:var(--panel);border-top:1px solid var(--line);
@@ -70,11 +90,28 @@
   .state{display:flex;align-items:center;gap:6px}
   .pip{width:7px;height:7px;border-radius:50%;background:var(--danger)}
   .pip.open{background:var(--ok)}
+  .pip.busy{background:var(--brass)}
   footer .spec{margin-left:auto;letter-spacing:.04em}
 
+  /* ---------- toast ---------- */
+  .toast{position:fixed;right:16px;bottom:44px;z-index:5;max-width:min(380px,calc(100vw - 32px));
+    background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--dim);border-radius:4px;
+    padding:10px 14px;font-size:12.5px;line-height:1.45;color:var(--text);
+    box-shadow:0 8px 28px rgba(0,0,0,.45);opacity:0;transform:translateY(6px);pointer-events:none;
+    transition:opacity .18s,transform .18s}
+  .toast.show{opacity:1;transform:none}
+  .toast.ok{border-left-color:var(--ok)}
+  .toast.err{border-left-color:var(--danger)}
+
   @media (max-width:640px){
-    header{flex-wrap:wrap}
-    .filename{display:none}
+    header{flex-wrap:wrap;gap:8px;padding:10px}
+    .brand{order:1}
+    .filename{order:2;max-width:none;flex:1;text-align:right}
+    .spacer{display:none}
+    /* wrap rather than scroll: a control hidden off the edge is a control nobody finds */
+    .actions{order:3;flex-wrap:wrap;gap:8px;width:100%}
+    .actions button{flex:1 1 auto}
+    .actions select{flex:1 1 100%}
     footer .spec{display:none}
   }
   @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
@@ -91,17 +128,19 @@
   </div>
   <span id="fname" class="filename">untitled</span>
   <div class="spacer"></div>
-  <button id="btnNew">New</button>
-  <button id="btnOpen">Open</button>
-  <button id="btnSave" class="primary">Save</button>
-  <button id="btnSaveAs">Save as</button>
-  <button id="btnLock" disabled>Lock now</button>
-  <select id="autolock" title="Auto-lock after inactivity">
-    <option value="0">Auto-lock: off</option>
-    <option value="60">Auto-lock: 1 min</option>
-    <option value="300" selected>Auto-lock: 5 min</option>
-    <option value="900">Auto-lock: 15 min</option>
-  </select>
+  <div class="actions">
+    <button id="btnNew" title="Start a new document">New</button>
+    <button id="btnOpen" title="Open an encrypted file (Ctrl/⌘+O)">Open</button>
+    <button id="btnSave" class="primary" title="Encrypt and save (Ctrl/⌘+S)">Save</button>
+    <button id="btnSaveAs" title="Encrypt and save to a new file (Ctrl/⌘+Shift+S)">Save as</button>
+    <button id="btnLock" disabled>Lock now</button>
+    <select id="autolock" title="Auto-lock after inactivity">
+      <option value="0">Auto-lock: off</option>
+      <option value="60">Auto-lock: 1 min</option>
+      <option value="300" selected>Auto-lock: 5 min</option>
+      <option value="900">Auto-lock: 15 min</option>
+    </select>
+  </div>
 </header>
 
 <main>
@@ -115,33 +154,57 @@
         <rect x="4" y="10" width="16" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6"/>
       </svg>
       <h2>LOCKED</h2>
-      <p>The text above is what this document looks like at rest.</p>
+      <p>Your document is held only as AES-256-GCM ciphertext until you unlock it.</p>
+      <p id="lockMeta" class="meta"></p>
       <form id="unlockForm">
-        <input type="password" id="unlockPw" placeholder="Password" autocomplete="off" aria-label="Password">
-        <button class="primary" type="submit">Unlock</button>
+        <span class="pwfield">
+          <input type="password" id="unlockPw" placeholder="Password" autocomplete="off" aria-label="Password">
+          <button type="button" class="reveal" id="revealUnlock" aria-pressed="false" aria-label="Show password" title="Show password">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/>
+            </svg>
+          </button>
+        </span>
+        <button class="primary" type="submit" id="unlockBtn">Unlock</button>
       </form>
+      <span id="capsUnlock" class="caps" role="status"></span>
       <div id="unlockErr" class="err" role="alert"></div>
+      <p class="caption">The pattern behind this card is illustrative, not your file's bytes.</p>
     </div>
   </div>
 </main>
 
 <footer>
-  <span class="state"><span id="pip" class="pip"></span><span id="stateTxt">no document</span></span>
+  <span class="state" aria-live="polite"><span id="pip" class="pip"></span><span id="stateTxt">no document</span></span>
   <span id="counts">0 chars</span>
-  <span class="spec">AES-256-GCM · PBKDF2-SHA256 · 600,000 iter · local only</span>
+  <span class="spec">AES-256-GCM · scrypt N=2^15 r=8 p=1 · local only</span>
 </footer>
 
+<!-- transient status messages -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <!-- set / change password -->
-<dialog id="pwDialog">
+<dialog id="pwDialog" aria-labelledby="pwTitle">
   <h2 id="pwTitle">SET PASSWORD</h2>
   <p id="pwHint">This password encrypts the file. There is no recovery if you forget it.</p>
   <form method="dialog" id="pwForm">
     <label for="pw1">Password</label>
-    <input type="password" id="pw1" autocomplete="new-password">
-    <div class="meter"><div id="meterBar"></div></div>
+    <span class="pwfield">
+      <input type="password" id="pw1" autocomplete="new-password">
+      <button type="button" class="reveal" id="revealPw1" aria-pressed="false" aria-label="Show password" title="Show password">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/>
+        </svg>
+      </button>
+    </span>
+    <div class="meterwrap">
+      <div class="meter" aria-hidden="true"><div id="meterBar"></div></div>
+      <span id="meterTxt" class="meterTxt"></span>
+    </div>
     <label for="pw2">Confirm password</label>
     <input type="password" id="pw2" autocomplete="new-password">
-    <div id="pwErr" class="err"></div>
+    <span id="capsPw" class="caps" role="status"></span>
+    <div id="pwErr" class="err" role="alert"></div>
     <div class="row">
       <button type="button" id="pwCancel">Cancel</button>
       <button class="primary" value="ok" id="pwOk">Encrypt &amp; continue</button>
@@ -150,59 +213,277 @@
 </dialog>
 
 <!-- password prompt for opening a file -->
-<dialog id="openDialog">
-  <h2>ENTER PASSWORD</h2>
+<dialog id="openDialog" aria-labelledby="openTitle">
+  <h2 id="openTitle">ENTER PASSWORD</h2>
   <p id="openName" style="font-family:var(--mono)"></p>
   <form method="dialog" id="openForm">
-    <input type="password" id="openPw" autocomplete="off" placeholder="Password" aria-label="Password">
-    <div id="openErr" class="err"></div>
+    <span class="pwfield">
+      <input type="password" id="openPw" autocomplete="off" placeholder="Password" aria-label="Password">
+      <button type="button" class="reveal" id="revealOpen" aria-pressed="false" aria-label="Show password" title="Show password">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/>
+        </svg>
+      </button>
+    </span>
+    <span id="capsOpen" class="caps" role="status"></span>
+    <div id="openErr" class="err" role="alert"></div>
     <div class="row">
       <button type="button" id="openCancel">Cancel</button>
-      <button class="primary" value="ok">Decrypt</button>
+      <button class="primary" value="ok" id="openOk">Decrypt</button>
     </div>
   </form>
 </dialog>
 
+<!-- generic confirmation -->
+<dialog id="confirmDialog" aria-labelledby="confirmTitle">
+  <h2 id="confirmTitle">DISCARD CHANGES?</h2>
+  <form method="dialog" id="confirmForm">
+    <p id="confirmBody" class="body"></p>
+    <div class="row">
+      <button type="button" id="confirmCancel">Cancel</button>
+      <button class="danger" value="ok" id="confirmOk">Discard</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- The encrypted document lives here, base64 of SECTXT1|salt|IV|ciphertext. Empty = blank template.
+     The HTML comments are the markers a save splices between; they survive DOM serialisation
+     verbatim, whereas the <script> tag's attributes are the serialiser's to renormalise.
+     type="text/plain" is neither executed nor HTML-parsed, and base64 cannot contain "</scr"+"ipt>". -->
+<!--CRAIGVAULT:BEGIN--><script id="vault" type="text/plain"></script><!--CRAIGVAULT:END-->
+
 <script>
 "use strict";
-/* ================= crypto core =================
-   File format:  "SECTXT1" (7B) | salt (16B) | IV (12B) | AES-GCM ciphertext(+tag)
-*/
-const MAGIC = new TextEncoder().encode("SECTXT1");
-const ITER = 600000;
+/* Captured before ANY DOM mutation: this is the file exactly as loaded. Every save is built by
+   slicing this string, so runtime state — and anything derived from the plaintext — cannot reach
+   disk. This MUST stay the first statement, and must never be rebuilt from the live DOM. */
+const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
 
-async function deriveKey(password, salt){
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    {name:"PBKDF2", salt, iterations:ITER, hash:"SHA-256"},
-    base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+/* ================= crypto core =================
+   Vault payload (SECTXT2):
+     "SECTXT2" (7B) | kdf id (1B) | log2(N) (1B) | r (1B) | p (1B) | salt (16B) | IV (12B) | ct+tag
+   The whole 39-byte header is the AES-GCM additional authenticated data, so the stored KDF
+   parameters cannot be altered without failing authentication.
+
+   Legacy (SECTXT1):  "SECTXT1" (7B) | salt (16B) | IV (12B) | ct+tag, PBKDF2-HMAC-SHA256 at ITER.
+   Still readable so vaults written before scrypt keep opening; never written any more.
+
+   Key derivation is scrypt (RFC 7914). scrypt is PBKDF2-HMAC-SHA256 bookends around a
+   memory-hard core, and both bookends run at one iteration — so crypto.subtle still does all
+   the hashing here and the only hand-written code is the Salsa20/8 / BlockMix / ROMix core.
+   Why memory-hard: PBKDF2 is cheap to run thousands of ways in parallel on a GPU, which is
+   exactly the attack on a stolen vault. scrypt forces 32 MB per guess instead.
+*/
+const MAGIC2 = new TextEncoder().encode("SECTXT2");
+const MAGIC1 = new TextEncoder().encode("SECTXT1");
+const HDR = 39;                  // SECTXT2 header length, also the AAD length
+const KDF_SCRYPT = 1;
+const ITER = 600000;             // legacy SECTXT1 read path only
+
+// Cost for new vaults. Measured in Chrome: 2^14 = 124ms, 2^15 = 245ms, 2^16 = 485ms
+// (PBKDF2 at 600k was 74ms). These are written into every file, so raising them later
+// cannot break a vault that already exists — unlike the old compiled-in ITER.
+const LOGN = 15, RPAR = 8, PPAR = 1;          // N = 32768, 32 MB per guess
+const MAXMEM = 512 * 1024 * 1024;             // refuse absurd parameters from a hostile file
+
+const rotl = (a, b) => (a << b) | (a >>> (32 - b));
+
+// A macrotask yield. setTimeout would do, but it is clamped to ~4ms once nested, which would
+// dominate a 245ms derivation; a MessageChannel round-trip is unclamped and still lets the
+// browser paint (a microtask/`await null` would not).
+const yieldToUI = (() => {
+  const ch = new MessageChannel();
+  return () => new Promise(res => { ch.port1.onmessage = () => res(); ch.port2.postMessage(0); });
+})();
+
+function salsa20_8(B){
+  const x = new Uint32Array(16);
+  x.set(B);
+  for (let i = 0; i < 8; i += 2){
+    x[ 4] ^= rotl(x[ 0] + x[12],  7);  x[ 8] ^= rotl(x[ 4] + x[ 0],  9);
+    x[12] ^= rotl(x[ 8] + x[ 4], 13);  x[ 0] ^= rotl(x[12] + x[ 8], 18);
+    x[ 9] ^= rotl(x[ 5] + x[ 1],  7);  x[13] ^= rotl(x[ 9] + x[ 5],  9);
+    x[ 1] ^= rotl(x[13] + x[ 9], 13);  x[ 5] ^= rotl(x[ 1] + x[13], 18);
+    x[14] ^= rotl(x[10] + x[ 6],  7);  x[ 2] ^= rotl(x[14] + x[10],  9);
+    x[ 6] ^= rotl(x[ 2] + x[14], 13);  x[10] ^= rotl(x[ 6] + x[ 2], 18);
+    x[ 3] ^= rotl(x[15] + x[11],  7);  x[ 7] ^= rotl(x[ 3] + x[15],  9);
+    x[11] ^= rotl(x[ 7] + x[ 3], 13);  x[15] ^= rotl(x[11] + x[ 7], 18);
+
+    x[ 1] ^= rotl(x[ 0] + x[ 3],  7);  x[ 2] ^= rotl(x[ 1] + x[ 0],  9);
+    x[ 3] ^= rotl(x[ 2] + x[ 1], 13);  x[ 0] ^= rotl(x[ 3] + x[ 2], 18);
+    x[ 6] ^= rotl(x[ 5] + x[ 4],  7);  x[ 7] ^= rotl(x[ 6] + x[ 5],  9);
+    x[ 4] ^= rotl(x[ 7] + x[ 6], 13);  x[ 5] ^= rotl(x[ 4] + x[ 7], 18);
+    x[11] ^= rotl(x[10] + x[ 9],  7);  x[ 8] ^= rotl(x[11] + x[10],  9);
+    x[ 9] ^= rotl(x[ 8] + x[11], 13);  x[10] ^= rotl(x[ 9] + x[ 8], 18);
+    x[12] ^= rotl(x[15] + x[14],  7);  x[13] ^= rotl(x[12] + x[15],  9);
+    x[14] ^= rotl(x[13] + x[12], 13);  x[15] ^= rotl(x[14] + x[13], 18);
+  }
+  for (let i = 0; i < 16; i++) B[i] = (B[i] + x[i]) | 0;
 }
-async function encryptText(text, password){
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(password, salt);
-  const ct   = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(text)));
-  const out  = new Uint8Array(MAGIC.length + 16 + 12 + ct.length);
-  out.set(MAGIC,0); out.set(salt,MAGIC.length); out.set(iv,MAGIC.length+16); out.set(ct,MAGIC.length+28);
+
+// 2r 64-byte blocks chained through Salsa, output reordered even-blocks-then-odd.
+function blockMix(B, Y, r){
+  const X = new Uint32Array(16);
+  X.set(B.subarray((2*r - 1) * 16, 2*r * 16));
+  for (let i = 0; i < 2*r; i++){
+    const o = i * 16;
+    for (let j = 0; j < 16; j++) X[j] ^= B[o + j];
+    salsa20_8(X);
+    Y.set(X, ((i & 1) ? r + ((i - 1) >> 1) : (i >> 1)) * 16);
+  }
+}
+
+// The memory-hard part. V really is N*128*r bytes; that allocation is the whole point.
+async function roMix(B, N, r, onProgress){
+  const len = 32 * r;
+  let V;
+  try{ V = new Uint32Array(len * N); }
+  catch(_){ throw new Error("memory"); }        // constrained device — reported, not a crash
+  const X = new Uint32Array(len), Y = new Uint32Array(len);
+  X.set(B);
+  for (let i = 0; i < N; i++){
+    V.set(X, i * len);
+    blockMix(X, Y, r); X.set(Y);
+    if (onProgress && (i & 2047) === 0){ onProgress(i / (2*N)); await yieldToUI(); }
+  }
+  for (let i = 0; i < N; i++){
+    const j = (X[(2*r - 1) * 16] >>> 0) & (N - 1);      // Integerify mod N; N is a power of two
+    const off = j * len;
+    for (let k = 0; k < len; k++) X[k] ^= V[off + k];
+    blockMix(X, Y, r); X.set(Y);
+    if (onProgress && (i & 2047) === 0){ onProgress(0.5 + i / (2*N)); await yieldToUI(); }
+  }
+  B.set(X);
+  V.fill(0); X.fill(0); Y.fill(0);
+}
+
+async function scrypt(password, salt, N, r, p, dkLen, onProgress){
+  const pw = new TextEncoder().encode(password);
+  const key = await crypto.subtle.importKey("raw", pw, "PBKDF2", false, ["deriveBits"]);
+  const pbkdf2 = async (s, n) => new Uint8Array(await crypto.subtle.deriveBits(
+    {name:"PBKDF2", salt: s, iterations: 1, hash: "SHA-256"}, key, n * 8));
+  // Typed-array views are little-endian on every platform a browser runs on, which is the
+  // byte order scrypt specifies for these blocks.
+  const B = new Uint32Array((await pbkdf2(salt, p * 128 * r)).buffer);
+  for (let i = 0; i < p; i++){
+    await roMix(B.subarray(i * 32 * r, (i + 1) * 32 * r), N, r,
+      onProgress && (f => onProgress((i + f) / p)));
+  }
+  const out = await pbkdf2(new Uint8Array(B.buffer), dkLen);
+  B.fill(0);
   return out;
 }
-async function decryptBytes(bytes, password){
-  const m = bytes.slice(0, MAGIC.length);
-  if (m.length !== MAGIC.length || m.some((b,i)=>b!==MAGIC[i])) throw new Error("format");
-  const salt = bytes.slice(MAGIC.length, MAGIC.length+16);
-  const iv   = bytes.slice(MAGIC.length+16, MAGIC.length+28);
-  const ct   = bytes.slice(MAGIC.length+28);
-  const key  = await deriveKey(password, salt);
-  const pt   = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct); // throws on wrong pw / tamper
-  return new TextDecoder().decode(pt);
+
+async function deriveKey(password, salt, logN, r, p, onProgress){
+  const N = 1 << logN;
+  if (logN < 1 || logN > 22 || r < 1 || p < 1 || N * 128 * r > MAXMEM) throw new Error("format");
+  const dk = await scrypt(password, salt, N, r, p, 32, onProgress);
+  const key = await crypto.subtle.importKey("raw", dk, {name:"AES-GCM"}, false, ["encrypt","decrypt"]);
+  dk.fill(0);
+  return key;
+}
+
+const hasMagic = (bytes, magic) => bytes.length >= magic.length && magic.every((b,i) => b === bytes[i]);
+
+async function encryptText(text, password, onProgress){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const header = new Uint8Array(HDR);
+  header.set(MAGIC2, 0);
+  header[7] = KDF_SCRYPT; header[8] = LOGN; header[9] = RPAR; header[10] = PPAR;
+  header.set(salt, 11); header.set(iv, 27);
+  const key = await deriveKey(password, salt, LOGN, RPAR, PPAR, onProgress);
+  const ct  = new Uint8Array(await crypto.subtle.encrypt(
+    {name:"AES-GCM", iv, additionalData: header}, key, new TextEncoder().encode(text)));
+  const out = new Uint8Array(HDR + ct.length);
+  out.set(header, 0); out.set(ct, HDR);
+  return out;
+}
+
+async function decryptBytes(bytes, password, onProgress){
+  if (hasMagic(bytes, MAGIC2)){
+    if (bytes.length < HDR || bytes[7] !== KDF_SCRYPT) throw new Error("format");
+    const header = bytes.slice(0, HDR);                    // authenticated, so params can't be edited
+    const salt = bytes.slice(11, 27), iv = bytes.slice(27, 39), ct = bytes.slice(HDR);
+    const key = await deriveKey(password, salt, bytes[8], bytes[9], bytes[10], onProgress);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv, additionalData: header}, key, ct);
+    return new TextDecoder().decode(pt);
+  }
+  if (hasMagic(bytes, MAGIC1)){
+    // legacy read path: PBKDF2, no AAD. Saving re-writes the vault as SECTXT2.
+    const salt = bytes.slice(7, 23), iv = bytes.slice(23, 35), ct = bytes.slice(35);
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations: ITER, hash: "SHA-256"},
+      base, {name:"AES-GCM", length: 256}, false, ["decrypt"]);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    return new TextDecoder().decode(pt);
+  }
+  throw new Error("format");
+}
+
+/* ================= vault container =================
+   The app file is also the data file. Everything here exists to make that safe: a save is a splice
+   of PRISTINE, never a serialisation of the live DOM, and it is proved correct before it is written.
+*/
+const V_BEGIN = "<!--CRAIGVAULT:BEGIN-->", V_END = "<!--CRAIGVAULT:END-->";
+
+function b64encode(bytes){
+  let s = "";
+  // chunked: fromCharCode.apply over a whole large array overflows the stack
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/(.{76})/g, "$1\n");   // wrapping is safe: atob strips ASCII whitespace
+}
+function b64decode(text){
+  const s = atob(text);
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b;
+}
+
+// Pull the payload back out of a vault document. Returns null when there is no usable payload;
+// `markers` reports whether this even looks like a vault, so callers can tell "empty" from "not ours".
+function extractPayload(html){
+  const i = html.indexOf(V_BEGIN), j = html.indexOf(V_END);
+  if (i < 0 || j < i) return {markers:false, bytes:null};
+  const seg = html.slice(i + V_BEGIN.length, j);
+  const open = seg.indexOf(">"), close = seg.lastIndexOf("<");
+  if (open < 0 || close < open) return {markers:true, bytes:null};
+  const b64 = seg.slice(open + 1, close).trim();
+  if (!b64) return {markers:true, bytes:null};
+  try{ return {markers:true, bytes:b64decode(b64)}; }
+  catch(_){ return {markers:true, bytes:null}; }
+}
+
+// Build the document to write: PRISTINE with only the payload region replaced, then verified.
+// The prefix and suffix are slices of PRISTINE, so everything outside the payload is identical
+// by construction — there is no path for plaintext or runtime state to appear in them.
+function buildVaultHtml(bytes){
+  const i = PRISTINE.indexOf(V_BEGIN), j = PRISTINE.indexOf(V_END);
+  if (i < 0 || j < i) throw new Error("vault markers missing — nothing written");
+  const html = PRISTINE.slice(0, i + V_BEGIN.length)
+    + '<script id="vault" type="text/plain">\n' + b64encode(bytes) + '\n<\/' + 'script>'
+    + PRISTINE.slice(j);
+  const back = extractPayload(html).bytes;
+  if (!back || back.length !== bytes.length || back.some((b,k)=>b !== bytes[k]))
+    throw new Error("vault verification failed — nothing written");
+  return html;
+}
+
+// What did we just open? A legacy raw .sectxt, a vault .html, or neither.
+function payloadFrom(bytes){
+  if (hasMagic(bytes, MAGIC2) || hasMagic(bytes, MAGIC1))
+    return {markers:true, bytes};                      // a raw .sectxt payload, either version
+  return extractPayload(new TextDecoder().decode(bytes));
 }
 
 /* ================= app state ================= */
 const editor = document.getElementById("editor");
 const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnLock","autolock",
-  "lockscreen","cipherwall","unlockForm","unlockPw","unlockErr","pip","stateTxt","counts",
-  "pwDialog","pwTitle","pwHint","pwForm","pw1","pw2","pwErr","pwCancel",
-  "openDialog","openName","openForm","openPw","openErr","openCancel"].map(id=>[id,document.getElementById(id)]));
+  "lockscreen","cipherwall","lockMeta","unlockForm","unlockPw","unlockBtn","unlockErr","revealUnlock","capsUnlock",
+  "pip","stateTxt","counts","toast","vault",
+  "pwDialog","pwTitle","pwHint","pwForm","pw1","pw2","pwErr","pwCancel","pwOk","revealPw1","capsPw","meterBar","meterTxt",
+  "openDialog","openName","openForm","openPw","openErr","openCancel","openOk","revealOpen","capsOpen",
+  "confirmDialog","confirmTitle","confirmBody","confirmForm","confirmCancel","confirmOk"].map(id=>[id,document.getElementById(id)]));
 
 let password = null;        // current document password (memory only)
 let fileHandle = null;      // FS Access API handle when available
@@ -211,17 +492,55 @@ let dirty = false;
 let locked = false;
 let lockedBlob = null;      // ciphertext of the session while locked
 let idleTimer = null;
+let busy = false;           // a crypto operation is in flight
+let progress = -1;          // 0-100 while scrypt is deriving, -1 when there is nothing to report
+let toastTimer = null;
 
+// hasFS only says the method EXISTS. It can exist and still be refused at call time —
+// see pickerRefused() below — so never treat this as "in-place saving will work".
 const hasFS = "showSaveFilePicker" in window;
+let fsBlocked = false;      // set once a picker is refused; the session uses download/upload after that
+
+// the picker exists but the browser won't run it: cross-origin iframe (VS Code's Simple Browser),
+// a restrictive Permissions-Policy, or expired user activation
+const pickerRefused = e => e.name === "SecurityError" || e.name === "NotAllowedError";
 
 function setDirty(v){ dirty = v; render(); }
 function render(){
   els.fname.textContent = fileName + (dirty ? " •" : "");
   els.fname.classList.toggle("dirty", dirty);
-  els.pip.className = "pip" + (password && !locked ? " open" : "");
-  els.stateTxt.textContent = locked ? "locked" : (password ? "unlocked" : "no password set");
-  els.counts.textContent = editor.value.length + " chars";
-  els.btnLock.disabled = !password || locked;
+  els.pip.className = "pip" + (busy ? " busy" : password && !locked ? " open" : "");
+  els.stateTxt.textContent = busy ? (progress >= 0 ? "deriving key… " + progress + "%" : "working…")
+    : locked ? "locked"
+    : password ? "unlocked"
+    : "no password · auto-lock off";
+  els.counts.textContent = locked ? "—" : editor.value.length + " chars";
+  els.btnLock.disabled = busy || !password || locked;
+  els.btnLock.title = password
+    ? "Lock now (Ctrl/⌘+L)"
+    : "Save with a password first — locking needs a key to re-encrypt with";
+  for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy;
+  // doSave refuses while locked, so don't leave the buttons looking live
+  els.btnSave.disabled = els.btnSaveAs.disabled = busy || locked;
+}
+
+// scrypt runs on the main thread and calls this once per 2048 ROMix iterations, so it has to
+// stay cheap: skip the re-render unless the whole number changed.
+function setProgress(f){
+  const pct = Math.round(f * 100);
+  if (pct === progress) return;
+  progress = pct;
+  render();
+}
+
+/* ================= transient messages ================= */
+function flash(msg, kind = ""){
+  clearTimeout(toastTimer);
+  els.toast.textContent = msg;
+  els.toast.className = "toast show " + kind;
+  // errors persist until the next message: a "your data was not saved" notice that
+  // times itself out is what made this failure look like a silent no-op
+  if (kind !== "err") toastTimer = setTimeout(()=>{ els.toast.className = "toast " + kind; }, 3500);
 }
 
 /* ================= password dialogs ================= */
@@ -229,6 +548,7 @@ function askNewPassword(title){
   return new Promise(resolve=>{
     els.pwTitle.textContent = title;
     els.pw1.value = els.pw2.value = ""; els.pwErr.textContent = ""; meter("");
+    hideReveal(els.pw1, els.revealPw1); els.capsPw.classList.remove("show"); els.capsPw.textContent = "";
     els.pwDialog.showModal(); els.pw1.focus();
     const done = val=>{ els.pwDialog.close(); cleanup(); resolve(val); };
     const submit = e=>{
@@ -244,13 +564,14 @@ function askNewPassword(title){
   });
 }
 function meter(v){
-  const bar = document.getElementById("meterBar");
   let s = 0;
   if (v.length >= 8) s++; if (v.length >= 14) s++;
   if (/[a-z]/.test(v) && /[A-Z]/.test(v)) s++;
   if (/\d/.test(v)) s++; if (/[^A-Za-z0-9]/.test(v)) s++;
-  bar.style.width = (s/5*100) + "%";
-  bar.style.background = s <= 2 ? "var(--danger)" : s <= 3 ? "var(--brass)" : "var(--ok)";
+  els.meterBar.style.width = (s/5*100) + "%";
+  els.meterBar.style.background = s <= 2 ? "var(--danger)" : s <= 3 ? "var(--brass)" : "var(--ok)";
+  // same thresholds as the colour, so meaning isn't carried by colour alone
+  els.meterTxt.textContent = v ? (s <= 2 ? "Weak" : s <= 3 ? "Fair" : "Strong") : "";
 }
 els.pw1.addEventListener("input", e=>meter(e.target.value));
 
@@ -258,6 +579,7 @@ function askOpenPassword(name, errMsg = ""){
   return new Promise(resolve=>{
     els.openName.textContent = name;
     els.openPw.value = ""; els.openErr.textContent = errMsg;
+    hideReveal(els.openPw, els.revealOpen); els.capsOpen.classList.remove("show"); els.capsOpen.textContent = "";
     els.openDialog.showModal(); els.openPw.focus();
     const done = val=>{ els.openDialog.close(); cleanup(); resolve(val); };
     const submit = e=>{ e.preventDefault(); done(els.openPw.value); };
@@ -268,79 +590,173 @@ function askOpenPassword(name, errMsg = ""){
   });
 }
 
+function askConfirm(title, body, okLabel){
+  return new Promise(resolve=>{
+    els.confirmTitle.textContent = title;
+    els.confirmBody.textContent = body;
+    els.confirmOk.textContent = okLabel;
+    els.confirmDialog.showModal(); els.confirmCancel.focus();
+    const done = val=>{ els.confirmDialog.close(); cleanup(); resolve(val); };
+    const submit = e=>{ e.preventDefault(); done(true); };
+    const cancel = ()=>done(false);
+    const cleanup = ()=>{ els.confirmForm.removeEventListener("submit",submit); els.confirmCancel.removeEventListener("click",cancel); els.confirmDialog.removeEventListener("cancel",cancel); };
+    els.confirmForm.addEventListener("submit", submit);
+    els.confirmCancel.addEventListener("click", cancel);
+    els.confirmDialog.addEventListener("cancel", cancel);   // Escape
+  });
+}
+
+/* ---- password field affordances: reveal toggle + caps lock warning ---- */
+function hideReveal(input, btn){
+  input.type = "password";
+  btn.setAttribute("aria-pressed","false");
+  btn.setAttribute("aria-label","Show password"); btn.title = "Show password";
+}
+[[els.pw1, els.revealPw1], [els.openPw, els.revealOpen], [els.unlockPw, els.revealUnlock]]
+  .forEach(([input, btn])=>{
+    btn.addEventListener("click", ()=>{               // type="button": must not submit the dialog form
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.setAttribute("aria-pressed", String(show));
+      btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      btn.title = show ? "Hide password" : "Show password";
+      input.focus();
+    });
+  });
+[[els.pw1, els.capsPw], [els.pw2, els.capsPw], [els.openPw, els.capsOpen], [els.unlockPw, els.capsUnlock]]
+  .forEach(([input, warn])=>{
+    const check = e=>{
+      if (typeof e.getModifierState !== "function") return;
+      const on = e.getModifierState("CapsLock");
+      warn.classList.toggle("show", on);
+      // set the text rather than just unhiding it: role="status" announces content changes, not visibility ones
+      warn.textContent = on ? "⇪ Caps Lock is on" : "";
+    };
+    input.addEventListener("keydown", check);
+    input.addEventListener("keyup", check);
+    input.addEventListener("blur", ()=>{ warn.classList.remove("show"); warn.textContent = ""; });
+  });
+
 /* ================= file ops ================= */
 async function doSave(as=false){
-  if (locked) return;
+  if (locked || busy) return;
   if (!password){
     const pw = await askNewPassword("SET PASSWORD");
     if (pw === null) return;
     password = pw;
   }
-  const bytes = await encryptText(editor.value, password);
+  busy = true; progress = -1; render();
+  let justBlocked = false;
   try{
-    if (hasFS){
-      if (!fileHandle || as){
-        fileHandle = await window.showSaveFilePicker({
-          suggestedName: fileName.endsWith(".sectxt") ? fileName : "secrets.sectxt",
-          types:[{description:"CraigVault encrypted text", accept:{"application/octet-stream":[".sectxt"]}}]
+    const bytes = await encryptText(editor.value, password, setProgress);
+    // built and verified BEFORE any picker or write: a vault that can't prove itself is never offered
+    const html = buildVaultHtml(bytes);
+
+    let handle = null;
+    if (hasFS && !fsBlocked){
+      try{
+        handle = (fileHandle && !as) ? fileHandle : await window.showSaveFilePicker({
+          suggestedName: fileName.endsWith(".html") ? fileName : "vault.html",
+          types:[{description:"CraigVault vault", accept:{"text/html":[".html"]}}]
         });
+      }catch(e){
+        if (e.name === "AbortError") return;          // user cancelled — leave every bit of state alone
+        if (!pickerRefused(e)) throw e;               // a real failure still reports as one
+        fsBlocked = justBlocked = true;               // refused: use the download path from here on
       }
-      const w = await fileHandle.createWritable();
-      await w.write(bytes); await w.close();
-      fileName = fileHandle.name;
-    } else {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([bytes],{type:"application/octet-stream"}));
-      a.download = fileName.endsWith(".sectxt") ? fileName : "secrets.sectxt";
-      a.click(); URL.revokeObjectURL(a.href);
     }
-    setDirty(false);
-  }catch(e){ if (e.name !== "AbortError") alert("Save failed: " + e.message); }
-  render();
+
+    if (handle){
+      const w = await handle.createWritable();
+      await w.write(html); await w.close();
+      fileHandle = handle;                  // only record a target we actually wrote to
+      fileName = handle.name;
+      setDirty(false);
+      flash("Encrypted and saved to " + fileName + ".", "ok");
+    } else {
+      const name = fileName.endsWith(".html") ? fileName : "vault.html";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([html],{type:"text/html"}));
+      a.download = name;
+      a.click(); URL.revokeObjectURL(a.href);
+      fileName = name;                    // the download path used to leave this as "untitled"
+      setDirty(false);
+      // one message, not two: a separate notice would be overwritten in the same tick
+      flash(justBlocked
+        ? "In-place saving isn't available in this browser view — downloaded " + name + " instead."
+        : "Downloaded " + name + " — check your Downloads folder.", "ok");
+    }
+  }catch(e){ if (e.name !== "AbortError") flash("Save failed: " + e.message, "err"); }
+  finally{ busy = false; render(); resetIdle(); }   // resetIdle here arms auto-lock right after the first save
 }
 
 async function doOpen(){
+  if (busy) return;
   let bytes, name;
   try{
-    if (hasFS){
-      const [h] = await window.showOpenFilePicker({
-        types:[{description:"CraigVault encrypted text", accept:{"application/octet-stream":[".sectxt"]}}]
-      });
-      const f = await h.getFile();
+    let picked = null;
+    if (hasFS && !fsBlocked){
+      try{
+        [picked] = await window.showOpenFilePicker({
+          types:[{description:"CraigVault vault", accept:{"text/html":[".html"], "application/octet-stream":[".sectxt"]}}]
+        });
+      }catch(e){
+        if (e.name === "AbortError") return;          // user cancelled
+        if (!pickerRefused(e)) throw e;
+        fsBlocked = true;                             // refused: fall through to <input type=file>
+      }
+    }
+    if (picked){
+      const f = await picked.getFile();
       bytes = new Uint8Array(await f.arrayBuffer());
-      name = f.name; fileHandle = h;
+      name = f.name; fileHandle = picked;
     } else {
-      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".sectxt";
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".html,.sectxt";
       const f = await new Promise(res=>{ inp.onchange = ()=>res(inp.files[0]); inp.click(); });
       if (!f) return;
       bytes = new Uint8Array(await f.arrayBuffer());
       name = f.name; fileHandle = null;
     }
-  }catch(e){ if (e.name !== "AbortError") alert("Open failed: " + e.message); return; }
+  }catch(e){ if (e.name !== "AbortError") flash("Open failed: " + e.message, "err"); return; }
+
+  // a vault .html, a legacy .sectxt, or neither — decided before we bother asking for a password
+  const found = payloadFrom(bytes);
+  if (!found.bytes){
+    flash(found.markers
+      ? "That vault is empty — there is nothing in it to open."
+      : "Not a CraigVault file — no encrypted payload found.", "err");
+    return;
+  }
+  const payload = found.bytes;
 
   // password loop — reprompts with an error message until correct or cancelled
   let errMsg = "";
   while (true){
     const pw = await askOpenPassword(name, errMsg);
     if (pw === null) return;
+    busy = true; progress = -1; render();
     try{
-      const text = await decryptBytes(bytes, pw);
+      const text = await decryptBytes(payload, pw, setProgress);
       password = pw; fileName = name;
       editor.value = text; locked = false; lockedBlob = null;
-      hideLock(); setDirty(false); resetIdle();
+      hideLock(); setDirty(false); resetIdle(); editor.focus();
+      flash("Decrypted " + name + ".", "ok");
       return;
     }catch(err){
       errMsg = err.message === "format"
         ? "Not a CraigVault file (bad header)."
         : "Incorrect password, or the file was modified.";
-    }
+    }finally{ busy = false; render(); }
   }
 }
 
-function doNew(){
-  if (dirty && !confirm("Discard unsaved changes?")) return;
+async function doNew(){
+  if (busy) return;
+  if (dirty && !await askConfirm("DISCARD CHANGES?",
+    "This document has unsaved edits. They are not written anywhere, so discarding loses them for good.",
+    "Discard")) return;
   editor.value = ""; password = null; fileHandle = null; fileName = "untitled";
-  locked = false; lockedBlob = null; hideLock(); setDirty(false);
+  locked = false; lockedBlob = null; hideLock(); setDirty(false); editor.focus();
 }
 
 /* ================= lock / unlock ================= */
@@ -351,28 +767,47 @@ function cipherNoise(n){
   return s;
 }
 async function doLock(){
-  if (!password || locked) return;
-  lockedBlob = await encryptText(editor.value, password);   // preserve unsaved edits, encrypted
-  const approxLen = Math.min(Math.max(editor.value.length * 1.4, 400), 4000);
+  if (!password || locked || busy) return;
+  busy = true; progress = -1; render();
+  try{
+    lockedBlob = await encryptText(editor.value, password, setProgress); // preserve unsaved edits, encrypted
+  }catch(e){
+    flash("Could not lock: " + e.message, "err");
+    return;                                                 // plaintext stays put rather than being wiped unrecoverably
+  }finally{ busy = false; render(); }
+  const approxLen = editor.value.length * 1.4;
   editor.value = "";                                        // wipe plaintext
   locked = true;
-  els.cipherwall.textContent = cipherNoise(Math.floor(approxLen));
-  els.unlockPw.value = ""; els.unlockErr.textContent = "";
-  els.lockscreen.classList.add("show");
-  els.unlockPw.focus();
+  showLock(approxLen);
   render();
 }
+// the display half of a lock, shared by doLock and by booting a vault that carries data
+function showLock(approxLen){
+  els.cipherwall.textContent = cipherNoise(Math.floor(Math.min(Math.max(approxLen, 400), 4000)));
+  els.lockMeta.textContent = fileName + (dirty ? " · unsaved edits are held encrypted" : "");
+  els.unlockPw.value = ""; els.unlockErr.textContent = "";
+  hideReveal(els.unlockPw, els.revealUnlock); els.capsUnlock.classList.remove("show"); els.capsUnlock.textContent = "";
+  els.lockscreen.classList.add("show");
+  els.unlockPw.focus();
+}
 async function doUnlock(pw){
+  if (busy) return;
+  busy = true; progress = -1; els.unlockBtn.disabled = true; els.unlockBtn.textContent = "Unlocking…"; render();
   try{
-    const text = await decryptBytes(lockedBlob, pw);
+    const text = await decryptBytes(lockedBlob, pw, setProgress);
+    // a successful GCM decrypt proves pw is the password — needed when booting straight into
+    // the lockscreen, and a no-op reassignment on the ordinary lock/unlock path
+    password = pw;
     editor.value = text; lockedBlob = null; locked = false;
-    hideLock(); resetIdle(); render(); editor.focus();
+    hideLock(); resetIdle(); editor.focus();
   }catch(_){
     els.unlockErr.textContent = "Incorrect password.";
     els.unlockPw.value = ""; els.unlockPw.focus();
+  }finally{
+    busy = false; els.unlockBtn.disabled = false; els.unlockBtn.textContent = "Unlock"; render();
   }
 }
-function hideLock(){ els.lockscreen.classList.remove("show"); els.cipherwall.textContent = ""; }
+function hideLock(){ els.lockscreen.classList.remove("show"); els.cipherwall.textContent = ""; els.lockMeta.textContent = ""; }
 
 els.unlockForm.addEventListener("submit", e=>{ e.preventDefault(); doUnlock(els.unlockPw.value); });
 
@@ -393,14 +828,43 @@ els.btnSaveAs.addEventListener("click", ()=>doSave(true));
 els.btnLock.addEventListener("click", doLock);
 editor.addEventListener("input", ()=>{ setDirty(true); });
 
+// the editor is capped to a reading measure, so the margin beside it must still focus it
+document.querySelector("main").addEventListener("mousedown", e=>{
+  if (!locked && e.target.tagName !== "TEXTAREA"){ e.preventDefault(); editor.focus(); }
+});
+
 document.addEventListener("keydown", e=>{
-  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="s"){ e.preventDefault(); doSave(e.shiftKey); }
-  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="o"){ e.preventDefault(); doOpen(); }
-  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="l"){ e.preventDefault(); doLock(); }
+  if (!(e.ctrlKey||e.metaKey) || busy) return;
+  const k = e.key.toLowerCase();
+  if (k==="s"){ e.preventDefault(); doSave(e.shiftKey); }
+  if (k==="o"){ e.preventDefault(); doOpen(); }
+  if (k==="l"){ e.preventDefault(); doLock(); }
 });
 window.addEventListener("beforeunload", e=>{ if (dirty){ e.preventDefault(); e.returnValue = ""; } });
 
-render();
+/* ================= boot ================= */
+// A vault carries its own data: if this file has a payload, come up locked and ask for the
+// password before anything else. No payload (the blank template) behaves exactly as before.
+(function boot(){
+  const payload = els.vault.textContent.trim();
+  if (payload){
+    try{
+      lockedBlob = b64decode(payload);
+    }catch(_){
+      render();
+      flash("This vault's data is unreadable — the payload is corrupt.", "err");
+      return;
+    }
+    locked = true;
+    fileName = decodeURIComponent(location.pathname.split("/").pop()) || "vault.html";
+    render();
+    showLock(lockedBlob.length * 1.4);
+    return;                                   // showLock focuses the password field
+  }
+  render();
+  // autofocus on desktop only — on touch this would throw up the virtual keyboard unasked
+  if (!matchMedia("(pointer:coarse)").matches) editor.focus();
+})();
 </script>
 </body>
 </html>

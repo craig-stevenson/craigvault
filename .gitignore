@@ -1,4 +1,8 @@
-# Encrypted documents — never commit user data
+# Encrypted documents — never commit user data.
+# A saved vault is an .html carrying its own ciphertext, so ignore every .html at the
+# repo root and re-admit only the blank template.
+/*.html
+!/index.html
 *.sectxt
 
 # OS cruft

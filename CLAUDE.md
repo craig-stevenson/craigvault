@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-CraigVault is a password-protected text editor that lives entirely in one HTML file. It encrypts to AES-256-GCM via the Web Crypto API and makes zero network requests.
+CraigVault is a password-protected text editor that lives entirely in one HTML file — **and so does the document**. Saving writes a new HTML file carrying the editor plus the user's notes as AES-256-GCM ciphertext; double-clicking that file boots straight into a password prompt. Zero network requests. `index.html` is the blank template; every saved vault is a standalone copy of it with a payload.
 
 ## Commands
 
@@ -13,65 +13,110 @@ xdg-open index.html            # run it — file:// is a secure context, so cryp
 python3 -m http.server 8000    # serve over HTTP when you need a real origin
 ```
 
-In-place saving needs the File System Access API (Chromium only). Firefox and Safari exercise the download fallback, which is a separate code path — see gotcha 8.
+In-place saving needs the File System Access API (Chromium only). Firefox and Safari exercise the download fallback, which is a separate code path — see gotcha 8. **Embedded browser views (VS Code's Simple Browser, and anything else that frames the page cross-origin) also fall back**, because Chromium refuses the picker there — see gotcha 12. Test in a real browser window, not the editor's preview pane.
 
 ## Architecture
 
-Everything is `index.html`, 406 lines, three layers:
+Everything is `index.html`, 870 lines, three layers:
 
-- **Styles** (`:7-81`) — CSS custom properties on `:root` are the whole design system (brass `#c9a227` accent on dark panels). No framework.
-- **Markup** (`:83-165`) — header toolbar, editor `<textarea>`, an absolutely-positioned `.lockscreen` overlay, and two `<dialog method="dialog">` elements (`pwDialog` for setting a password, `openDialog` for entering one).
-- **Script** (`:166-406`) — banner-commented sections: crypto core, app state, password dialogs, file ops, lock/unlock, idle auto-lock, wiring.
+- **Styles** (`:7-118`) — CSS custom properties on `:root` are the whole design system (brass `#c9a227` accent on dark panels). No framework.
+- **Markup** (`:120-253`) — header toolbar, editor `<textarea>`, an absolutely-positioned `.lockscreen` overlay, and three `<dialog method="dialog">` elements (`pwDialog` for setting a password, `openDialog` for entering one, `confirmDialog` for destructive confirmations). A `#toast` div carries transient status messages.
+- **Payload** (`:253`) — `<!--CRAIGVAULT:BEGIN--><script id="vault" type="text/plain">…</script><!--CRAIGVAULT:END-->`, the base64 document. Empty in the template.
+- **Script** (`:255-868`) — banner-commented sections: `PRISTINE` capture, crypto core (scrypt + AES-GCM), vault container, app state, transient messages, password dialogs, file ops, lock/unlock, idle auto-lock, wiring, boot.
 
-**State model.** Three states, driven by the module-scope `password` (`:207`) and `locked`:
+**State model.** Three states, driven by the module-scope `password` (`:488`) and `locked`:
 
 ```
 no document  →  unlocked                    →  locked
 (no password)   (password set,                 (plaintext wiped from the DOM,
                  plaintext in the textarea)     ciphertext held in lockedBlob)
+      ↑                                              ↑
+ blank template                            boot() lands here directly when
+ (empty payload)                           the file carries a payload
 ```
 
-**Crypto contract** (`:168-198`). `encryptText` and `decryptBytes` are the only functions that touch `crypto.subtle`. Salt and IV are freshly generated on every save. `decryptBytes` throwing is the *only* wrong-password signal — GCM authentication doubles as the password check, so there is no separate verifier to maintain.
+`boot()` (`:848`) is the entry point: a payload means come up `locked` with `lockedBlob` set and no `password` yet — the one state the app can start in that the lock/unlock cycle never produces. `doUnlock` adopts the password on success, which is what makes that state resolvable.
+
+**Crypto contract** (`:262-426`). AES-256-GCM for the cipher, **scrypt** (RFC 7914) for key derivation. `encryptText` / `decryptBytes` / `deriveKey` are the only functions that touch `crypto.subtle`. Salt and IV are freshly generated on every save. `decryptBytes` throwing is the *only* wrong-password signal — GCM authentication doubles as the password check, so there is no separate verifier to maintain.
+
+scrypt is PBKDF2-HMAC-SHA256 bookends around a memory-hard core, and both bookends run at **one** iteration, so `crypto.subtle` still does every hash. The only hand-written cryptographic code is `salsa20_8` (`:299`), `blockMix` (`:325`) and `roMix` (`:337`) — pure arithmetic, checked against the RFC 7914 vectors. **Do not reimplement a hash function here.**
+
+Measured in Chrome: N=2^14 → 124ms, 2^15 → 245ms, 2^16 → 485ms; the PBKDF2 it replaced was 74ms. Shipping `LOGN = 15` (`:286`) — 32 MB per guess. The point is not wall-clock but memory: PBKDF2 let a GPU run thousands of guesses in parallel almost free, scrypt makes each one cost 32 MB.
 
 ## Hard constraints
 
 - **Never add a dependency, bundler, framework, or `src/` split.** One self-contained file with nothing to trust is the product's security argument, not a stylistic preference. Push back on proposals that break it.
 - **Never persist the password or plaintext.** No `localStorage`, `sessionStorage`, IndexedDB, cookies, or network calls. The password lives in a variable that dies with the tab.
-- **The `.sectxt` format is frozen** — `SECTXT1` magic (7B) | salt (16B) | IV (12B) | ciphertext+tag. Changing `ITER` silently breaks every file a user has already saved; it is not a tunable. A format change needs a new magic string plus a read path for the old one.
+- **Formats are versioned by magic, and a read path is never deleted.** Current: `SECTXT2` (7B) | kdf id (1B) | log2(N) (1B) | r (1B) | p (1B) | salt (16B) | IV (12B) | ct+tag. Legacy `SECTXT1` (7B) | salt (16B) | IV (12B) | ct+tag is still read via PBKDF2 at `ITER`; `encryptText` only ever writes `SECTXT2`, so a vault upgrades itself on its next save. Any further format change gets `SECTXT3` and keeps both older paths.
+- **Cost parameters are read from the file, never from the constants.** `LOGN`/`RPAR`/`PPAR` apply only to vaults being *written*; `decryptBytes` uses the values in the header. This is what makes raising the cost safe, and it is the fix for the old design where `ITER` was compiled in and could not be changed without orphaning every existing file.
+- **The 39-byte header is AES-GCM additional authenticated data.** Stored parameters therefore cannot be edited — no downgrading `log2(N)` to 1. If you change the header layout, change the AAD with it.
+- **A save must never serialise the live DOM.** It splices `PRISTINE` (`:260`) — see gotcha 13. This is the difference between writing ciphertext and writing the user's plaintext to disk.
 
 ## Gotchas
 
-1. **The `els` lookup array (`:202`)** collects every DOM id into one `Object.fromEntries` call. Add an element to the markup without adding its id here and `els.yourThing` is silently `undefined` until something uses it.
-2. **`render()` (`:218`) is the only UI-sync point.** There is no reactive framework — every state mutation must end in `render()` or `setDirty()` (`:217`, which calls it).
-3. **Both dialogs use a promise-wrapping pattern** (`askNewPassword` `:228`, `askOpenPassword` `:257`): wrap `showModal()` in a Promise and *manually* `removeEventListener` on both the submit and cancel paths. Skip the cleanup and the stale handler fires again on the next open. Copy the existing shape for any new dialog.
-4. **The crypto parameters are written in four places** — the `ITER` constant (`:172`), the footer spec text (`:131`), and the README's feature list and format table. Change one, change all of them, plus `SECURITY.md`.
-5. **The error channel is a string comparison.** `decryptBytes` throws `Error("format")` for a bad header versus a WebCrypto `OperationError` for a wrong password or tampering; `doOpen` (`:332`) branches on `err.message === "format"` to pick its message. Fragile, but preserve the distinction if you refactor — telling "not our file" apart from "wrong password" matters to users.
-6. **Lock requires a password.** `doLock` (`:353`) returns early when `password` is null, so a never-saved document cannot lock and auto-lock silently doesn't run. That's deliberate — there is no key to re-encrypt with. Don't "fix" it without designing what an unsaved lock would even mean.
-7. **The cipherwall is cosmetic.** `cipherNoise` (`:347`) generates random base64-ish characters, *not* the document's real ciphertext, while the lockscreen copy says "The text above is what this document looks like at rest." Known discrepancy: rendering the real ciphertext would be more honest but leaks length and structure over the user's shoulder. Weigh that before changing either side.
-8. **Every file op has two code paths.** `hasFS` (`:215`) branches both save and open into File System Access versus download / `<input type=file>`. Test both.
-9. **`resetIdle` runs constantly** — five document-level passive listeners feed it (`:385`). Keep it cheap.
+1. **The `els` lookup array (`:481-486`)** collects every DOM id into one `Object.fromEntries` call. Add an element to the markup without adding its id here and `els.yourThing` is silently `undefined` until something uses it.
+2. **`render()` (`:509`) is the only UI-sync point.** There is no reactive framework — every state mutation must end in `render()` or `setDirty()` (`:508`, which calls it). It also owns the `busy` flag: every button's `disabled` is decided here, so never set one ad hoc.
+3. **All three dialogs use a promise-wrapping pattern** (`askNewPassword` `:547`, `askOpenPassword` `:578`, `askConfirm` `:593`): wrap `showModal()` in a Promise and *manually* `removeEventListener` on both the submit and cancel paths. Skip the cleanup and the stale handler fires again on the next open. Copy the existing shape for any new dialog.
+4. **The crypto parameters are written in four places** — the cost constants `LOGN`/`RPAR`/`PPAR` (`:286`), the footer spec text (`:180`), and the README's feature list and format table. Change one, change all of them, plus `SECURITY.md`.
+5. **The error channel is a string comparison.** `decryptBytes` throws `Error("format")` for a bad header versus a WebCrypto `OperationError` for a wrong password or tampering; `doOpen` (`:693`) branches on `err.message === "format"` to pick its message. Fragile, but preserve the distinction if you refactor — telling "not our file" apart from "wrong password" matters to users.
+6. **Lock requires a password.** `doLock` (`:769`) returns early when `password` is null, so a never-saved document cannot lock and auto-lock silently doesn't run. That's deliberate — there is no key to re-encrypt with. Don't "fix" it without designing what an unsaved lock would even mean. The UI explains rather than hides this: `render()` gives the disabled button an explanatory `title` and the footer reads `no password · auto-lock off`.
+7. **The cipherwall is cosmetic.** `cipherNoise` (`:763`) generates random base64-ish characters, *not* the document's real ciphertext. The lockscreen copy says so outright ("The pattern behind this card is illustrative, not your file's bytes"), so the two now agree — keep them that way. Rendering the real ciphertext would leak length and structure over the user's shoulder; that's why it stays fake.
+8. **Every file op has two code paths.** `hasFS` (`:501`) branches both save and open into File System Access versus download / `<input type=file>`. Test both — the download path is the one that historically drifted (it used to leave `fileName` as `untitled`).
+9. **`resetIdle` runs constantly** — five document-level passive listeners feed it (`:820`). Keep it cheap. `doSave` also calls it in its `finally`, which is what arms auto-lock immediately after the first save.
+10. **`busy` gates every crypto entry point.** `doSave`/`doOpen`/`doLock`/`doUnlock` each open with `if (busy) return;` and set the flag around the `await`, because PBKDF2 at 600k iterations is slow enough for a second Enter to re-enter the flow. Any new async crypto path needs the same guard and a `finally` that clears it.
+11. **`*{margin:0}` (`:15`) kills the UA's `dialog{margin:auto}`.** Modal dialogs need `margin:auto` restated (`:74`) or they render in the top-left corner instead of centred.
+12. **`hasFS` is an existence check, not a permission check.** `"showSaveFilePicker" in window` is `true` inside VS Code's Simple Browser, but the call throws `SecurityError: Cross origin sub frames aren't allowed to show a file picker` — the API is gated by Permissions Policy in a cross-origin iframe. So both pickers are wrapped in their own `try` and classified by `pickerRefused` (`SecurityError`/`NotAllowedError`): a refusal sets the session-scoped `fsBlocked` and falls through to the download / `<input type=file>` path, while `AbortError` still means "user cancelled" and anything else still reports as a real failure. Keep those three outcomes distinct — collapsing them either swallows real errors or turns a cancel into a stray download.
+13. **`PRISTINE` (`:260`) must stay the first statement in the script.** It is `document.documentElement.outerHTML` captured before any DOM mutation, and every save is built by slicing it (`buildVaultHtml`, `:460`). Capture it any later — or rebuild it from the live DOM — and a save bakes in runtime state: `lockMeta` and the cipherwall are *derived from the plaintext*. The prefix and suffix of a written vault are slices of `PRISTINE`, so nothing outside the payload can change by construction; that property is the safety argument, not the care taken.
+14. **The payload markers are HTML comments for a reason.** `V_BEGIN`/`V_END` (`:428`) are what the splice locates, never the `<script id="vault">` tag: comments survive DOM serialisation verbatim, whereas a serialiser may renormalise tag attributes. The `<script>` element is regenerated on every save, so no code depends on how it was rendered. `type="text/plain"` keeps it inert, and base64 can never contain `</scr`+`ipt>`.
+15. **A save that cannot verify itself does not happen.** `buildVaultHtml` re-extracts the payload from the document it just built and byte-compares it before returning, and it runs *before* the picker opens. App and data now share one file, so a bad write loses both — a throw here is correct and must stay louder than a silent partial save.
+16. **Serialisation is idempotent after one round-trip, and tested.** The first save normalises formatting; generation 2 onward is byte-identical outside the payload. `h_vault`/`e2e_vault` assert this, so drift across saves would fail the suite rather than accumulate silently.
+17. **scrypt runs on the main thread; PBKDF2 did not.** WebCrypto derived keys off-thread, so the old code could freeze-free. `roMix` therefore yields every 2048 iterations and reports progress through `setProgress` (`:529`), which drives the footer to `deriving key… 47%`. The yield is a **MessageChannel** round-trip (`yieldToUI`, `:294`), not `setTimeout(0)` — setTimeout is clamped to ~4ms once nested, which would have added ~250ms to a 245ms derivation. Measured overhead of yielding plus progress: 240ms → 251ms. Any new work in that loop must keep it cheap.
+18. **`decryptBytes` reads cost parameters from the file, `encryptText` writes the constants.** Mixing those up produces a build that appears to work while quietly ignoring what a vault actually says — the `h_scrypt` suite pins this with a vault hand-built at `logN=12`.
+19. **Never regenerate the legacy fixture with the current build.** `SECTXT1` backward compatibility is only proven by a file produced by the *old* PBKDF2 code; a fixture made by today's build proves nothing. The one in use was captured before the change and lives at `tests/legacy-sectxt1.json`, which carries its own do-not-regenerate note.
 
 ## Verifying a change
 
-No automated tests exist. After touching crypto, file ops, or lock logic, run this by hand:
+The repo ships no test runner, but a headless-Chrome harness pattern is used for changes here and is worth rebuilding when you touch crypto, the container, file ops, or lock logic: copy `index.html` to a scratch dir, append a `<script>` that asserts into a `#RESULTS` element, and drive it over the DevTools protocol (`Runtime.evaluate` with `awaitPromise`) — `--virtual-time-budget` will *not* wait for a real key derivation. Two things need a real browser rather than stubs: a genuine `Input.dispatchMouseEvent` click for user activation, and `Browser.setDownloadBehavior` to capture a real written file.
 
-1. Type text → **Save** → set a password → a `.sectxt` file is written.
-2. `xxd -l 7 file.sectxt` → `SECTXT1`. Save the same text twice → the bytes differ (fresh salt/IV).
-3. **New** → **Open** → wrong password → reprompt loop with "Incorrect password, or the file was modified", no crash.
-4. Correct password → plaintext returns, filename updates, dirty dot clears.
-5. Flip a ciphertext byte in a hex editor → same failure as a wrong password (GCM tag rejection). Never partial plaintext.
-6. Open a non-CraigVault file → the "bad header" message specifically.
-7. `Ctrl+L` → textarea wipes, noise wall appears, unlock restores *unsaved* edits.
-8. Auto-lock at 1 min → it locks when idle; typing resets the timer.
-9. Repeat 1-4 in Firefox to exercise the non-`hasFS` path.
+**The property that must never regress — no plaintext leaves via the container:**
+
+1. Type a distinctive string, show the lockscreen (so `lockMeta`/cipherwall are populated), then build a save. The output must not contain the string, `#lockMeta`/`#cipherwall`/`#editor`/`#toast` must serialise empty, no `<dialog open>`, and the regions outside the markers must be byte-identical to `PRISTINE`.
+
+**Crypto correctness comes first, and runs in Node — no browser needed.** The scrypt core uses
+`crypto.subtle` only for its single-iteration bookends, which Node provides, so the shipped code runs
+headless. Check it against the **RFC 7914 test vectors** before anything else: §8 Salsa20/8, §9
+BlockMix, §10 ROMix, and §12 vectors 1–3 (vector 2 has `p=16` and is the only one exercising the
+multi-block path). If those fail nothing else matters. Then, in the browser: `SECTXT2` header layout,
+AAD rejection of edited parameters, refusal of absurd `log2(N)`, and decryption of a vault hand-built
+at a *different* `logN` than the constant.
+
+**Backward compatibility, against a genuinely old file:** decrypt `tests/legacy-sectxt1.json`
+(**gotcha 19** — never regenerate it), then confirm re-saving produces `SECTXT2` and still opens.
+
+**Round-trip, by hand:**
+
+2. Type text → **Save** → set a password → choose `notes.html`.
+3. Open `notes.html` in a new tab: it boots **locked**, password field focused, header naming the file, footer `locked`, counter `—`, Save disabled.
+4. Wrong password → "Incorrect password.", stays locked, textarea still empty. Correct password → exact text returns, `Lock now` enables, dirty dot clear.
+5. Edit → Save → reload → the new text appears. Save twice → the payloads differ (fresh salt/IV) while the shell outside the markers stays byte-identical.
+6. Flip a base64 character in the payload → unlock fails like a wrong password (GCM tag). Never partial plaintext. Flip a byte inside the 39-byte header instead → same clean failure, via the AAD.
+6b. Unlock a large vault and watch the footer: it must count up (`deriving key… 47%`) and the tab must stay responsive — scrypt is on the main thread, so a regression here shows as a freeze (**gotcha 17**).
+7. Delete a marker → Save throws and writes **nothing**.
+8. Open a non-vault `.html` → "no encrypted payload found", distinct from a wrong password; an empty template → "that vault is empty".
+9. Open a legacy `.sectxt` → imports and decrypts; saving it produces `.html`.
+10. `Ctrl+L` → textarea wipes, noise wall appears, unlock restores *unsaved* edits. Auto-lock at 1 min locks when idle; typing resets the timer.
+11. Repeat 2-5 in Firefox for the non-`hasFS` path, and in VS Code's Simple Browser for the `fsBlocked` fallback (Save must download and the header must update, not stay `untitled`).
+12. The blank template with no payload must still come up unlocked with the editor focused and no prompt.
 
 ## Scope
 
-**Likely next feature:** password/key rotation. Changing a document's password currently means saving to a new file.
+**Likely next feature:** password/key rotation. Changing a vault's password currently means saving to a new file. `askNewPassword(title)` is already parameterised for it, and the container makes it cheap: re-encrypt and splice, no format work.
 
-**Permanent limits, not bugs.** Plaintext and password sitting in browser memory while unlocked, OS-level attacks (swap, memory dumps, keyloggers), weak user-chosen passwords, and the identifiable `SECTXT1` header are all documented as out of scope in `SECURITY.md`. Don't propose work to close them; auto-lock is a walk-away defense, not memory protection.
+**Permanent limits, not bugs.** Plaintext and password sitting in browser memory while unlocked, OS-level attacks (swap, memory dumps, keyloggers), weak user-chosen passwords, and the identifiable `SECTXT1` header and HTML shell are all documented as out of scope in `SECURITY.md`. Don't propose work to close them; auto-lock is a walk-away defense, not memory protection.
 
 ## Repo conventions
 
-- `*.sectxt` is the first entry in `.gitignore`. Never commit a test vault.
-- Crypto or format changes update `README.md` (features, format table, security notes) and `SECURITY.md` (scope) in the same commit.
+- **Never commit a vault.** `.gitignore` ignores `/*.html` and re-admits only `!/index.html`, because a saved vault is now an `.html` and would otherwise look exactly like the template. `*.sectxt` stays ignored for legacy files. Check `git status` before committing anything at the repo root.
+- `index.html` is the blank template — its payload element stays empty in the repo. If a diff ever shows base64 inside `<script id="vault">`, someone committed their data.
+- `tests/legacy-sectxt1.json` is a permanent fixture, not scratch: it is the only evidence the `SECTXT1` read path still works, and it cannot be rebuilt now that the PBKDF2 writer is gone.
+- Crypto, container, or format changes update `README.md` (features, format section, security notes) and `SECURITY.md` (scope) in the same commit.
