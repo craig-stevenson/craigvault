@@ -649,6 +649,14 @@ function hideReveal(input, btn){
   });
 
 /* ================= file ops ================= */
+// A vault is always written as .html. Name it after the file it came from, so importing
+// old-notes.sectxt suggests old-notes.html rather than discarding the name; a document that was
+// never saved has no name to keep and falls back to vault.html.
+const isHtml = n => /\.html$/i.test(n);
+const htmlNameFor = n => isHtml(n) ? n
+  : n === "untitled" ? "vault.html"
+  : n.replace(/\.[^./\\]*$/, "") + ".html";
+
 async function doSave(as=false){
   if (locked || busy) return;
   if (!password){
@@ -667,7 +675,7 @@ async function doSave(as=false){
     if (hasFS && !fsBlocked){
       try{
         handle = (fileHandle && !as) ? fileHandle : await window.showSaveFilePicker({
-          suggestedName: fileName.endsWith(".html") ? fileName : "vault.html",
+          suggestedName: htmlNameFor(fileName),
           types:[{description:"CraigVault vault", accept:{"text/html":[".html"]}}]
         });
       }catch(e){
@@ -685,7 +693,7 @@ async function doSave(as=false){
       setDirty(false);
       flash("Encrypted and saved to " + fileName + ".", "ok");
     } else {
-      const name = fileName.endsWith(".html") ? fileName : "vault.html";
+      const name = htmlNameFor(fileName);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([html],{type:"text/html"}));
       a.download = name;
@@ -703,7 +711,7 @@ async function doSave(as=false){
 
 async function doOpen(){
   if (busy) return;
-  let bytes, name;
+  let bytes, name, pickedHandle = null;
   try{
     let picked = null;
     if (hasFS && !fsBlocked){
@@ -720,13 +728,13 @@ async function doOpen(){
     if (picked){
       const f = await picked.getFile();
       bytes = new Uint8Array(await f.arrayBuffer());
-      name = f.name; fileHandle = picked;
+      name = f.name; pickedHandle = picked;
     } else {
       const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".html,.sectxt";
       const f = await new Promise(res=>{ inp.onchange = ()=>res(inp.files[0]); inp.click(); });
       if (!f) return;
       bytes = new Uint8Array(await f.arrayBuffer());
-      name = f.name; fileHandle = null;
+      name = f.name; pickedHandle = null;
     }
   }catch(e){ if (e.name !== "AbortError") flash("Open failed: " + e.message, "err"); return; }
 
@@ -749,6 +757,11 @@ async function doOpen(){
     try{
       const text = await decryptBytes(payload, pw, setProgress);
       password = pw; fileName = name;
+      // Adopt the save target only now. Every exit above — cancelled prompt, wrong password, not a
+      // vault, empty vault — must leave fileHandle on whatever document is still open, or an
+      // ordinary Save would silently overwrite a file the user only browsed to (issue #2).
+      // A legacy .sectxt is imported, never written back to: saving it produces a new .html.
+      fileHandle = isHtml(name) ? pickedHandle : null;
       editor.value = text; locked = false; lockedBlob = null;
       hideLock(); setDirty(false); resetIdle(); editor.focus();
       flash("Decrypted " + name + ".", "ok");

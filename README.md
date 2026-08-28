@@ -78,7 +78,7 @@ Files with the `SECTXT1` magic — written before the move to scrypt, using PBKD
 
 Saving splices only the region between those markers into a copy of the page source captured **before the app touched the DOM**, then re-extracts the payload and byte-compares it before writing. Everything outside the markers is therefore identical to the file you opened, and a save that cannot verify itself does not happen.
 
-Legacy `.sectxt` files — the raw payload, from before the data moved into the HTML — still open. Saving one produces a `.html` vault.
+Legacy `.sectxt` files — the raw payload, from before the data moved into the HTML — still open. Saving one produces a *new* `.html` vault and leaves the original `.sectxt` untouched, so importing is never destructive.
 
 ## Security notes
 
