@@ -43,6 +43,7 @@
     font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px;caret-color:var(--brass-hi)}
   textarea::placeholder{color:var(--placeholder)}
   textarea:focus{outline:none}
+  textarea[readonly]{opacity:.55;cursor:progress}
 
   /* locked overlay */
   .lockscreen{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:24px;text-align:center}
@@ -523,6 +524,11 @@ function render(){
     ? "Lock now (Ctrl/⌘+L)"
     : "Save with a password first — locking needs a key to re-encrypt with";
   for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy;
+  // The editor is part of "everything", not an exception to it. A save encrypts a snapshot taken
+  // before a ~300ms derivation; leaving the textarea writable meant keystrokes landed after that
+  // snapshot and were written nowhere, while dirty was cleared anyway (issue #3). readOnly blocks
+  // typing, paste, drop and undo alike, so there is no window to reconcile.
+  editor.readOnly = busy;
   // doSave refuses while locked, so don't leave the buttons looking live
   els.btnSave.disabled = els.btnSaveAs.disabled = busy || locked;
 }

@@ -22,6 +22,7 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 - **File System Access API** support for true in-place saves, with a download fallback on browsers that lack it
 - Keyboard shortcuts: `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+O` open, `Ctrl+L` lock
 - Password strength meter, unsaved-changes guard, no telemetry of any kind
+- The editor goes read-only for the moment a save or lock is encrypting, so nothing you type can be quietly left out of the file
 
 ## Usage
 
