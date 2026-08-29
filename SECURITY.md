@@ -12,7 +12,7 @@ In scope: flaws in the encryption, key derivation, file format, or lock/unlock l
 
 Out of scope (documented limits, not bugs — see the security notes in the README):
 
-- Plaintext or password remaining in browser memory while a document is unlocked. Locking discards the key and clears every password field, so this covers the unlocked state; a *locked* session that still exposes the key or the plaintext is in scope.
+- Plaintext or password remaining in browser memory while a document is unlocked. Locking discards the key and clears every password field, so this covers the unlocked state; a *locked* session that still exposes the key or the plaintext is in scope — as is one that can be discarded, replaced or edited without the password.
 - OS-level attacks such as memory dumps, swap files, or keyloggers
 - Weak user-chosen passwords. CraigVault warns when a new password is under 12 characters and explains why, but it will not refuse one: the file is yours. What you choose after being told is out of scope; *misinforming* you about that choice is not (see In scope, above).
 - The `SECTXT2` header, and the HTML shell around it, identifying a file as a CraigVault vault

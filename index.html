@@ -523,12 +523,19 @@ function render(){
     : password
     ? "Lock now (Ctrl/⌘+L)"
     : "Save with a password first — locking needs a key to re-encrypt with";
-  for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy;
+  // A locked session is inert, not merely covered: the lockscreen is an absolutely-positioned
+  // div, so anything left enabled behind it stays clickable, tabbable and scriptable (issue #8).
+  for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy || locked;
+  for (const b of [els.btnNew, els.btnOpen])
+    b.title = locked ? "Unlock this document first" : "";
   // The editor is part of "everything", not an exception to it. A save encrypts a snapshot taken
   // before a ~300ms derivation; leaving the textarea writable meant keystrokes landed after that
   // snapshot and were written nowhere, while dirty was cleared anyway (issue #3). readOnly blocks
   // typing, paste, drop and undo alike, so there is no window to reconcile.
-  editor.readOnly = busy;
+  editor.readOnly = busy || locked;
+  // tabIndex, not `inert`: doUnlock focuses the editor before render() runs in its finally, and an
+  // inert element silently refuses focus. readOnly and tabIndex=-1 both still allow it.
+  editor.tabIndex = locked ? -1 : 0;
   // doSave refuses while locked, so don't leave the buttons looking live
   els.btnSave.disabled = els.btnSaveAs.disabled = busy || locked;
 }
@@ -744,7 +751,7 @@ async function doSave(as=false){
 }
 
 async function doOpen(){
-  if (busy) return;
+  if (locked || busy) return;                 // Ctrl+O reaches here even with the button disabled
   let bytes, name, pickedHandle = null;
   try{
     let picked = null;
@@ -809,7 +816,10 @@ async function doOpen(){
 }
 
 async function doNew(){
-  if (busy) return;
+  // Refused while locked. The generic "discard unsaved edits?" prompt is not an authentication
+  // step, and since doLock drops the password, lockedBlob is the only copy of those edits —
+  // one click behind the lockscreen used to destroy them for good. Unlock first.
+  if (locked || busy) return;
   if (dirty && !await askConfirm("DISCARD CHANGES?",
     "This document has unsaved edits. They are not written anywhere, so discarding loses them for good.",
     "Discard")) return;
