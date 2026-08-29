@@ -492,6 +492,7 @@ let fileName = "untitled";
 let dirty = false;
 let locked = false;
 let lockedBlob = null;      // ciphertext of the session while locked
+let unverified = false;     // a download went out that nothing can confirm reached disk; see doSave
 let idleTimer = null;
 let busy = false;           // a crypto operation is in flight
 let progress = -1;          // 0-100 while scrypt is deriving, -1 when there is nothing to report
@@ -513,16 +514,17 @@ function render(){
   els.pip.className = "pip" + (busy ? " busy" : password && !locked ? " open" : "");
   els.stateTxt.textContent = busy ? (progress >= 0 ? "deriving key… " + progress + "%" : "working…")
     : locked ? "locked"
+    : unverified ? "downloaded · unconfirmed"
     : password ? "unlocked"
     : "no password · auto-lock off";
   els.counts.textContent = locked ? "—" : editor.value.length + " chars";
-  els.btnLock.disabled = busy || !password || locked;
+  els.btnLock.disabled = busy || locked;
   // password is null while locked, so check locked first or the tooltip misreads the state
   els.btnLock.title = locked
     ? "Already locked — enter the password to unlock"
     : password
     ? "Lock now (Ctrl/⌘+L)"
-    : "Save with a password first — locking needs a key to re-encrypt with";
+    : "Lock now (Ctrl/⌘+L) — you'll be asked to set a password first";
   // A locked session is inert, not merely covered: the lockscreen is an absolutely-positioned
   // div, so anything left enabled behind it stays clickable, tabbable and scriptable (issue #8).
   for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy || locked;
@@ -731,6 +733,7 @@ async function doSave(as=false){
       await w.write(html); await w.close();
       fileHandle = handle;                  // only record a target we actually wrote to
       fileName = handle.name;
+      unverified = false;                   // a completed write is proof; a download is not
       setDirty(false);
       flash("Encrypted and saved to " + fileName + ".", "ok");
     } else {
@@ -740,11 +743,18 @@ async function doSave(as=false){
       a.download = name;
       a.click(); URL.revokeObjectURL(a.href);
       fileName = name;                    // the download path used to leave this as "untitled"
+      // a.click() is fire-and-forget: no API reports whether a download was blocked, cancelled or
+      // written. Clearing dirty here claimed a save nobody could verify, and beforeunload gates on
+      // dirty — so the tab closed without a word on text that existed nowhere else (issue #6).
+      // Clear dirty so the app stays usable, but remember that the only copy is unconfirmed.
       setDirty(false);
+      unverified = true;
+      render();
       // one message, not two: a separate notice would be overwritten in the same tick
-      flash(justBlocked
+      flash((justBlocked
         ? "In-place saving isn't available in this browser view — downloaded " + name + " instead."
-        : "Downloaded " + name + " — check your Downloads folder.", "ok");
+        : "Downloaded " + name + ".")
+        + " CraigVault can't confirm a download reached disk — check your Downloads folder.", "ok");
     }
   }catch(e){ if (e.name !== "AbortError") flash("Save failed: " + e.message, "err"); }
   finally{ busy = false; render(); resetIdle(); }   // resetIdle here arms auto-lock right after the first save
@@ -803,6 +813,7 @@ async function doOpen(){
       // ordinary Save would silently overwrite a file the user only browsed to (issue #2).
       // A legacy .sectxt is imported, never written back to: saving it produces a new .html.
       fileHandle = isHtml(name) ? pickedHandle : null;
+      unverified = false;                   // opening it is proof that it exists
       editor.value = text; locked = false; lockedBlob = null;
       hideLock(); setDirty(false); resetIdle(); editor.focus();
       flash("Decrypted " + name + ".", "ok");
@@ -823,7 +834,7 @@ async function doNew(){
   if (dirty && !await askConfirm("DISCARD CHANGES?",
     "This document has unsaved edits. They are not written anywhere, so discarding loses them for good.",
     "Discard")) return;
-  editor.value = ""; password = null; fileHandle = null; fileName = "untitled";
+  editor.value = ""; password = null; fileHandle = null; fileName = "untitled"; unverified = false;
   locked = false; lockedBlob = null; hideLock(); setDirty(false); editor.focus();
 }
 
@@ -835,7 +846,17 @@ function cipherNoise(n){
   return s;
 }
 async function doLock(){
-  if (!password || locked || busy) return;
+  if (locked || busy) return;
+  // Locking needs a key to re-encrypt with, so a document that has never been saved has to acquire
+  // one first — exactly as doSave does on a first save (issue #7). Auto-lock deliberately does not
+  // come through here: resetIdle still requires a password, because a modal appearing after someone
+  // walked away would leave the plaintext on screen behind it until they came back and typed.
+  if (!password){
+    const pw = await askNewPassword("SET PASSWORD TO LOCK");
+    if (pw === null) return;
+    password = pw;
+    render();
+  }
   busy = true; progress = -1; render();
   try{
     lockedBlob = await encryptText(editor.value, password, setProgress); // preserve unsaved edits, encrypted
@@ -914,7 +935,11 @@ document.addEventListener("keydown", e=>{
   if (k==="o"){ e.preventDefault(); doOpen(); }
   if (k==="l"){ e.preventDefault(); doLock(); }
 });
-window.addEventListener("beforeunload", e=>{ if (dirty){ e.preventDefault(); e.returnValue = ""; } });
+// `unverified` counts as well as `dirty`: the whole point of issue #6 was a tab closing quietly
+// on a document whose only copy was a download nobody could confirm.
+window.addEventListener("beforeunload", e=>{
+  if (dirty || unverified){ e.preventDefault(); e.returnValue = ""; }
+});
 
 /* ================= boot ================= */
 // A vault carries its own data: if this file has a payload, come up locked and ask for the

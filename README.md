@@ -17,7 +17,7 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 - **Versioned format** — KDF parameters live in the file, so costs can be raised later without breaking vaults you already saved
 - **Authenticated** — a modified file fails to decrypt rather than yielding garbage
 - **Idle auto-lock** (off / 1 / 5 / 15 minutes) that wipes plaintext from the DOM, re-encrypts unsaved edits in memory, and discards the key — unlocking derives it from your password again
-- **Manual lock** with `Ctrl+L`, showing a ciphertext-style wall instead of your text
+- **Manual lock** with `Ctrl+L`, showing a ciphertext-style wall instead of your text — available even before the first save, which asks for a password so there is a key to lock with
 - **Self-contained vaults** — one `.html` holds the app and the encrypted document; double-click to open
 - **File System Access API** support for true in-place saves, with a download fallback on browsers that lack it
 - Keyboard shortcuts: `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+O` open, `Ctrl+L` lock

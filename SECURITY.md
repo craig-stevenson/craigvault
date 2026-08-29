@@ -14,6 +14,7 @@ Out of scope (documented limits, not bugs — see the security notes in the READ
 
 - Plaintext or password remaining in browser memory while a document is unlocked. Locking discards the key and clears every password field, so this covers the unlocked state; a *locked* session that still exposes the key or the plaintext is in scope — as is one that can be discarded, replaced or edited without the password.
 - OS-level attacks such as memory dumps, swap files, or keyloggers
+- A download that cannot be confirmed. Browsers give a page no way to tell whether a download reached disk, so on Firefox and Safari CraigVault says so and guards the tab against closing rather than claiming a save it cannot verify.
 - Weak user-chosen passwords. CraigVault warns when a new password is under 12 characters and explains why, but it will not refuse one: the file is yours. What you choose after being told is out of scope; *misinforming* you about that choice is not (see In scope, above).
 - The `SECTXT2` header, and the HTML shell around it, identifying a file as a CraigVault vault
 - The ~0.25s unlock delay: it is the cost that makes offline guessing expensive, and is meant to be felt

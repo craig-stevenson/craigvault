@@ -30,6 +30,7 @@ ORDER = [
     "test_autolock.py",         # issue #4
     "test_password_policy.py",  # issue #5
     "test_locked_ui.py",        # issue #8
+    "test_download_path.py",    # issue #6
 ]
 
 

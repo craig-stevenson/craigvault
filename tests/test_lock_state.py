@@ -4,6 +4,11 @@ doLock used to leave `password` in a live binding, so `doUnlock(password)` typed
 the console recovered the whole document without anyone knowing the password. The
 password inputs were also cleared when their dialog opened rather than when it closed,
 leaving plaintext in the DOM until the next open.
+
+Also covers issue #7: locking a document that has never been saved. It has no key to
+re-encrypt with, so doLock asks for one — the same thing doSave does on a first save.
+Auto-lock deliberately does not, since a modal firing after someone walks away would
+leave the plaintext on screen behind it.
 """
 
 import json
@@ -120,3 +125,51 @@ def run(r):
         r.equal("#openPw is wiped once the dialog closes", fields["openPw"], "")
         r.equal("#pw1 is wiped on the CANCEL path too", fields["pw1AfterCancel"], "")
         r.check("no password reaches the saved shell", not fields["inPristine"])
+
+    # --- issue #7: a never-saved document can still be locked ---------------
+    with Page() as p:
+        r.check("Lock is offered before any password exists",
+                not p.eval("document.getElementById('btnLock').disabled", False))
+        r.check("and the tooltip says a password will be asked for",
+                "asked to set a password"
+                in p.eval("document.getElementById('btnLock').title", False))
+        r.check("auto-lock stays off until a password exists — a modal after you walk away "
+                "would leave the plaintext on screen", p.eval("idleTimer === null", False))
+
+        p.click("#editor")
+        p.type(TEXT)
+
+        # cancelling the prompt must change nothing
+        p.eval("window.__l = doLock();", False)
+        p.wait("document.getElementById('pwDialog').open")
+        r.equal("locking a passwordless document asks for one",
+                p.eval("document.getElementById('pwTitle').textContent", False),
+                "SET PASSWORD TO LOCK")
+        p.click("#pwCancel")
+        p.eval("(async()=>{ await window.__l; })()")
+        r.check("cancelling leaves the document exactly as it was",
+                p.eval("!locked && password === null && lockedBlob === null", False))
+        r.equal("with the text untouched", p.eval("editor.value", False), TEXT)
+
+        # and going through with it locks
+        p.eval("window.__l = doLock();", False)
+        p.wait("document.getElementById('pwDialog').open")
+        p.eval("document.getElementById('pw1').value = %s;"
+               "document.getElementById('pw2').value = %s;" % (json.dumps(PW), json.dumps(PW)), False)
+        p.click("#pwOk")
+        p.eval("(async()=>{ await window.__l; })()")
+        p.wait("locked && !busy")
+        r.check("supplying a password locks the unsaved document",
+                p.eval("locked && !!lockedBlob && editor.value === ''", False))
+        r.check("and the key is dropped, as on any other lock",
+                p.eval("password === null", False))
+
+        p.eval("document.getElementById('unlockPw').value = %s;"
+               "document.getElementById('unlockForm').dispatchEvent("
+               "  new Event('submit',{cancelable:true}))" % json.dumps(PW), False)
+        p.wait("!busy && !locked")
+        r.equal("the new password unlocks it", p.eval("editor.value", False), TEXT)
+        r.check("saving afterwards does not ask for a password again",
+                p.eval("password === %s" % json.dumps(PW), False))
+        r.check("and auto-lock is armed now that a password exists",
+                p.eval("idleTimer !== null", False))
