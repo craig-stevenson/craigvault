@@ -39,6 +39,8 @@ A page cannot be handed a file handle to itself, so the first save of each sessi
 
 Because a vault carries its own copy of the editor, updating `index.html` does not update vaults you already saved. To move an old vault onto a newer editor, open it from a fresh template with **Open** and save it again.
 
+Tests live in [tests/](tests/) — `python3 tests/run.py` drives a real headless browser against `index.html`. They need Chrome and `websocket-client`; the vault itself still has no dependencies.
+
 To serve it over HTTP instead of `file://`:
 
 ```bash

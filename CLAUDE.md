@@ -6,12 +6,16 @@ CraigVault is a password-protected text editor that lives entirely in one HTML f
 
 ## Commands
 
-There is **no build step, no test runner, no linter, and no `package.json`**. Don't look for them.
+There is **no build step, no linter, and no `package.json`**, and there never will be — see the hard constraints. There *is* a test suite.
 
 ```bash
 xdg-open index.html            # run it — file:// is a secure context, so crypto.subtle works
 python3 -m http.server 8000    # serve over HTTP when you need a real origin
+python3 tests/run.py           # the suite: ~150 checks, ~26s, exit 0 only if all pass
+python3 tests/run.py password  # just the modules matching a filter
 ```
+
+The suite needs Chrome/Chromium on `PATH` and `pip install websocket-client`. Neither is a dependency *of the product* — `index.html` stays self-contained with nothing to trust, and nothing from `tests/` is ever shipped inside a vault. See `tests/README.md`.
 
 In-place saving needs the File System Access API (Chromium only). Firefox and Safari exercise the download fallback, which is a separate code path — see gotcha 10. **Embedded browser views (VS Code's Simple Browser, and anything else that frames the page cross-origin) also fall back**, because Chromium refuses the picker there — see gotcha 14. Test in a real browser window, not the editor's preview pane.
 
@@ -66,9 +70,9 @@ Measured in Chrome: N=2^14 → 124ms, 2^15 → 245ms, 2^16 → 485ms; the PBKDF2
 4. **All three dialogs use a promise-wrapping pattern** (`askNewPassword` `:572`, `askOpenPassword` `:630`, `askConfirm` `:645`): wrap `showModal()` in a Promise and *manually* `removeEventListener` on both the submit and cancel paths. Skip the cleanup and the stale handler fires again on the next open. Copy the existing shape for any new dialog.
 
    **Wipe password fields in `done()`, not on entry.** Closing a `<dialog>` does not clear its inputs, so clearing only at the top of the function leaves the plaintext password in the DOM until the *next* open — which was half of issue #1. `done()` is the single choke point both submit and cancel reach, and it receives `val` already evaluated, so wiping there cannot corrupt the resolved value. `doUnlock` needs the same treatment on its **success** path; the `catch` already clears. `wipeField` (`:570`) exists to make the intent greppable.
-5. **`MIN_PW` is advisory, and only for setting a password.** `askNewPassword` warns once below `MIN_PW` and relabels its primary button to *Use it anyway*; a second submit proceeds. It is never applied on open or unlock — enforcing it there would lock people out of vaults whose passwords predate the rule. `SECURITY.md` draws the same line: what you choose after being warned is out of scope, misinforming you about it is not.
+5. **`MIN_PW` is advisory, and only for setting a password.** `askNewPassword` (`:572`) warns once below `MIN_PW` (`:565`) and relabels its primary button to *Use it anyway*; a second submit proceeds. It is never applied on open or unlock — enforcing it there would lock people out of vaults whose passwords predate the rule. `SECURITY.md` draws the same line: what you choose after being warned is out of scope, misinforming you about it is not.
 
-   `meter` scores on **length alone**, and its thresholds are tied to `MIN_PW` so that "Weak" means exactly "shorter than the warning threshold" — change one and check the other. The old scoring weighted composition 3 points to length's 2, which rated `P@ssw0rd` *Strong* and a 25-character passphrase *Weak*, contradicting the README's own advice to use a long passphrase. Do not reintroduce a composition bonus: any bonus is precisely what lets a short password climb. The one non-length rule is a distinct-character floor, so `aaaa…` cannot score as long.
+   `meter` (`:613`) scores on **length alone**, and its thresholds are tied to `MIN_PW` so that "Weak" means exactly "shorter than the warning threshold" — change one and check the other. The old scoring weighted composition 3 points to length's 2, which rated `P@ssw0rd` *Strong* and a 25-character passphrase *Weak*, contradicting the README's own advice to use a long passphrase. Do not reintroduce a composition bonus: any bonus is precisely what lets a short password climb. The one non-length rule is a distinct-character floor, so `aaaa…` cannot score as long.
 
 6. **The crypto parameters are written in four places** — the cost constants `LOGN`/`RPAR`/`PPAR` (`:287`), the footer spec text (`:181`), and the README's feature list and format table. Change one, change all of them, plus `SECURITY.md`.
 7. **The error channel is a string comparison.** `decryptBytes` throws `Error("format")` for a bad header versus a WebCrypto `OperationError` for a wrong password or tampering; `doOpen` (`:753`) branches on `err.message === "format"` to pick its message. Fragile, but preserve the distinction if you refactor — telling "not our file" apart from "wrong password" matters to users.
@@ -99,7 +103,9 @@ Measured in Chrome: N=2^14 → 124ms, 2^15 → 245ms, 2^16 → 485ms; the PBKDF2
 
 ## Verifying a change
 
-The repo ships no test runner, but a headless-Chrome harness pattern is used for changes here and is worth rebuilding when you touch crypto, the container, file ops, or lock logic: copy `index.html` to a scratch dir, append a `<script>` that asserts into a `#RESULTS` element, and drive it over the DevTools protocol (`Runtime.evaluate` with `awaitPromise`) — `--virtual-time-budget` will *not* wait for a real key derivation. Two things need a real browser rather than stubs: a genuine `Input.dispatchMouseEvent` click for user activation, and `Browser.setDownloadBehavior` to capture a real written file.
+**Run `python3 tests/run.py` first.** It drives the real page over the DevTools protocol and covers the container property, the `SECTXT2` format and its AAD, `SECTXT1` compatibility, lock/unlock state, save-target discipline, the editor read-only guard, auto-lock, locked-session inertness, and password policy. `tests/README.md` explains the rules it follows; the two that matter most when adding to it are *only the browser's file pickers are stubbed* (a test that stubs app logic tests the stub) and *type, don't assign* (setting `editor.value` bypasses `readonly` and would pass against a broken build). `--virtual-time-budget` will *not* wait for a real key derivation.
+
+The manual checks below are what the suite does not reach: real pickers, real downloads, and how any of it feels.
 
 **The property that must never regress — no plaintext leaves via the container:**
 
