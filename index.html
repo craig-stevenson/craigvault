@@ -553,6 +553,11 @@ function flash(msg, kind = ""){
 }
 
 /* ================= password dialogs ================= */
+// Advisory, never enforced. It gates only the *setting* of a password: applying it on open or
+// unlock would lock people out of vaults whose passwords predate the rule.
+const MIN_PW = 12;
+const PW_OK_LABEL = els.pwOk.textContent;   // read from the markup so the two cannot drift
+let weakAck = false;                        // armed by one submit of a short password; any edit clears it
 // An <input> keeps its value after its dialog closes, so clearing on entry is not enough: the
 // plaintext password would sit in the DOM until the next open. Every exit path wipes instead.
 const wipeField = input => { input.value = ""; };
@@ -561,18 +566,32 @@ function askNewPassword(title){
   return new Promise(resolve=>{
     els.pwTitle.textContent = title;
     els.pw1.value = els.pw2.value = ""; els.pwErr.textContent = ""; meter("");
+    weakAck = false; els.pwOk.textContent = PW_OK_LABEL;
     hideReveal(els.pw1, els.revealPw1); els.capsPw.classList.remove("show"); els.capsPw.textContent = "";
     els.pwDialog.showModal(); els.pw1.focus();
     const done = val=>{
       els.pwDialog.close(); cleanup();
       wipeField(els.pw1); wipeField(els.pw2); meter("");   // val is already evaluated, so this cannot corrupt it
+      weakAck = false; els.pwOk.textContent = PW_OK_LABEL;  // restore on the way out, not just on the way in
       resolve(val);
     };
     const submit = e=>{
       e.preventDefault();
-      if (els.pw1.value.length < 1){ els.pwErr.textContent = "Password can't be empty."; return; }
-      if (els.pw1.value !== els.pw2.value){ els.pwErr.textContent = "Passwords don't match."; return; }
-      done(els.pw1.value);
+      const pw = els.pw1.value;
+      if (pw.length < 1){ els.pwErr.textContent = "Password can't be empty."; return; }
+      if (pw !== els.pw2.value){ els.pwErr.textContent = "Passwords don't match."; return; }
+      // Warned, not refused. A vault is a file someone can copy and grind offline for as long as
+      // they like, so length is the only defence that matters — but it is the user's file and the
+      // user's call, and saying so once is the honest middle.
+      if (pw.length < MIN_PW && !weakAck){
+        weakAck = true;
+        els.pwErr.textContent = "Only " + pw.length + " characters. A copied vault can be attacked "
+          + "offline indefinitely, so length is the defence that counts — " + MIN_PW
+          + "+ characters, or a few unrelated words.";
+        els.pwOk.textContent = "Use it anyway";
+        return;
+      }
+      done(pw);
     };
     const cancel = ()=>done(null);
     const cleanup = ()=>{ els.pwForm.removeEventListener("submit",submit); els.pwCancel.removeEventListener("click",cancel); };
@@ -580,17 +599,26 @@ function askNewPassword(title){
     els.pwCancel.addEventListener("click", cancel);
   });
 }
+// Length, and effectively only length. The old scoring weighted composition 3 points to length's
+// 2, which rated "P@ssw0rd" Strong and a 25-character passphrase Weak — the exact opposite of the
+// advice in the README, and of what costs an offline attacker anything. Symbols and digits add a
+// bounded constant to the search space; each extra character multiplies it.
 function meter(v){
+  // "aaaaaaaa…" is not a long password: one or two distinct characters is guessed as fast as the
+  // characters are, so cap the effective length rather than rewarding the repetition.
+  const n = new Set(v).size <= 2 ? Math.min(v.length, 6) : v.length;
   let s = 0;
-  if (v.length >= 8) s++; if (v.length >= 14) s++;
-  if (/[a-z]/.test(v) && /[A-Z]/.test(v)) s++;
-  if (/\d/.test(v)) s++; if (/[^A-Za-z0-9]/.test(v)) s++;
+  if (n >= 8) s++; if (n >= MIN_PW) s++; if (n >= 16) s++; if (n >= 20) s++; if (n >= 26) s++;
   els.meterBar.style.width = (s/5*100) + "%";
-  els.meterBar.style.background = s <= 2 ? "var(--danger)" : s <= 3 ? "var(--brass)" : "var(--ok)";
+  // s <= 1 is exactly "shorter than MIN_PW", so the bar and the warning never disagree
+  els.meterBar.style.background = s <= 1 ? "var(--danger)" : s <= 3 ? "var(--brass)" : "var(--ok)";
   // same thresholds as the colour, so meaning isn't carried by colour alone
-  els.meterTxt.textContent = v ? (s <= 2 ? "Weak" : s <= 3 ? "Fair" : "Strong") : "";
+  els.meterTxt.textContent = v ? (s <= 1 ? "Weak" : s <= 3 ? "Fair" : "Strong") : "";
 }
-els.pw1.addEventListener("input", e=>meter(e.target.value));
+els.pw1.addEventListener("input", e=>{
+  weakAck = false; els.pwOk.textContent = PW_OK_LABEL;   // a changed password gets a fresh warning
+  meter(e.target.value);
+});
 
 function askOpenPassword(name, errMsg = ""){
   return new Promise(resolve=>{
