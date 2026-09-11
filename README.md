@@ -2,9 +2,20 @@
 
 A password-protected text editor that runs entirely in one HTML file. Saving writes your notes as AES-256-GCM ciphertext to an ordinary `.txt` — plain text on the outside, unreadable without the password on the inside. A self-contained `.html` vault that carries the editor *and* the notes together still opens, and is how you hand a document to someone who doesn't have the app. No server, no account, no build step, no dependencies.
 
+```bash
+curl -LO https://github.com/craig-stevenson/craigvault/releases/latest/download/craigvault.html
+open craigvault.html   # that's the whole install
 ```
-open index.html   # that's the whole install
+
+**Verify it** — it's a security tool, so don't take a download on trust:
+
+```bash
+curl -LO https://github.com/craig-stevenson/craigvault/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS                                          # → craigvault.html: OK
+gh attestation verify craigvault.html --owner craig-stevenson    # needs gh 2.49 or later
 ```
+
+Every release is byte-identical to `index.html` at its tag, and is only published if the test suite passed first. Because your documents are separate `.txt` files, replacing `craigvault.html` upgrades the app for every document you have at once; only a shared bundle carries a frozen copy of the editor, by design. Clone the repo if you want the tests — the app is the one file.
 
 ## Why
 

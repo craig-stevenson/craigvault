@@ -1,0 +1,55 @@
+name: Release
+
+# Pushing a v* tag publishes one file. The suite must pass first, the tag must match the VERSION
+# inside the file, and the asset is byte-identical to index.html at that tag — the "build" is cp.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write        # create the release
+  id-token: write        # sign the provenance attestation (keyless, via GitHub OIDC)
+  attestations: write    # store it
+
+jobs:
+  suite:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    name: Publish one proven file
+    needs: suite         # no green, no release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true     # the annotated tag's message becomes the top of the release notes
+
+      - name: The tag must match the version inside the file
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          if ! grep -q "const VERSION = \"${want}\";" index.html; then
+            echo "::error::index.html does not declare VERSION \"${want}\" — bump it and re-tag"
+            exit 1
+          fi
+
+      - name: Build is a copy
+        run: |
+          cp index.html craigvault.html
+          sha256sum craigvault.html > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: craigvault.html
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          summary="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          gh release create "$GITHUB_REF_NAME" craigvault.html SHA256SUMS \
+            --title "CraigVault $GITHUB_REF_NAME" \
+            --notes "$summary" \
+            --generate-notes
