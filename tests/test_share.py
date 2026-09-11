@@ -126,6 +126,8 @@ def run(r):
         r.check("and answers 'is it safe to open this?'", "Nothing is sent anywhere" in card)
         r.check("without dropping the note that the wall is not real ciphertext",
                 "illustrative" in card)
+        r.check("and the bundle reports which editor it carries",
+                p.eval("document.getElementById('spec').textContent.endsWith(' · v' + VERSION)", False))
         p.eval("document.getElementById('unlockPw').value = %s;"
                "document.getElementById('unlockForm').dispatchEvent(new Event('submit',{cancelable:true}))"
                % json.dumps(DOC_PW), False)

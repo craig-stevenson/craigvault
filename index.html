@@ -191,7 +191,7 @@
 <footer>
   <span class="state" aria-live="polite"><span id="pip" class="pip"></span><span id="stateTxt">no document</span></span>
   <span id="counts">0 chars</span>
-  <span class="spec">AES-256-GCM · scrypt N=2^15 r=8 p=1 · local only</span>
+  <span class="spec" id="spec">AES-256-GCM · scrypt N=2^15 r=8 p=1 · local only</span>
 </footer>
 
 <!-- transient status messages -->
@@ -298,6 +298,7 @@ const ITER = 600000;             // legacy SECTXT1 read path only
 // (PBKDF2 at 600k was 74ms). These are written into every file, so raising them later
 // cannot break a vault that already exists — unlike the old compiled-in ITER.
 const LOGN = 15, RPAR = 8, PPAR = 1;          // N = 32768, 32 MB per guess
+const VERSION = "1.0.0";                      // the one place; the footer reads it at load, the release workflow checks the tag against it
 const MAXMEM = 512 * 1024 * 1024;             // refuse absurd parameters from a hostile file
 
 const rotl = (a, b) => (a << b) | (a >>> (32 - b));
@@ -536,10 +537,13 @@ function payloadFrom(bytes){
 const editor = document.getElementById("editor");
 const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnShare","btnLock","autolock",
   "lockscreen","cipherwall","lockMeta","unlockForm","unlockPw","unlockBtn","unlockErr","revealUnlock","capsUnlock",
-  "pip","stateTxt","counts","toast","vault",
+  "pip","stateTxt","counts","toast","vault","spec",
   "pwDialog","pwTitle","pwHint","pwForm","pw1","pw1Label","pw2","pwErr","pwCancel","pwOk","revealPw1","capsPw","meterBar","meterTxt",
   "openDialog","openName","openForm","openPw","openErr","openCancel","openOk","revealOpen","capsOpen",
   "confirmDialog","confirmTitle","confirmBody","confirmForm","confirmCancel","confirmOk"].map(id=>[id,document.getElementById(id)]));
+// Appended at load rather than written into the markup: PRISTINE is already captured above, so a
+// shared bundle's static footer stays clean and it reports its own embedded VERSION when it boots.
+els.spec.textContent += " · v" + VERSION;
 
 let password = null;        // current document password (memory only)
 let fileHandle = null;      // FS Access API handle when available

@@ -117,3 +117,10 @@ def run(r):
         r.check("empty payload is reported as empty, not as a bad password",
                 p.eval("extractPayload(PRISTINE).bytes === null "
                        "|| extractPayload(PRISTINE).bytes.length === 0", False))
+
+        # --- the app knows its version, and says so ------------------------------
+        r.check("VERSION is a semver triple", p.eval(r"/^\d+\.\d+\.\d+$/.test(VERSION)", False))
+        r.check("the footer shows it",
+                p.eval("document.getElementById('spec').textContent.endsWith(' · v' + VERSION)", False))
+        r.check("but it is appended at load, not baked into the shell — PRISTINE's footer is clean",
+                p.eval("!PRISTINE.includes('· v' + VERSION)", False))
