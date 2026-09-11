@@ -1,5 +1,8 @@
 """Issue #2 — fileHandle must only ever point at a document that was actually opened.
 
+Save writes the armoured .txt, so only a .txt is ever adopted as the save target. An HTML
+bundle (what Share produces) and a legacy .sectxt are imported, never written back to.
+
 doOpen assigned fileHandle the moment a file was picked, before the payload check and
 the password loop. Every early exit therefore left the handle aimed at a file that was
 never opened, and an ordinary Save writes to fileHandle with no picker and no
@@ -19,9 +22,11 @@ def _setup(p):
     """Two real vaults, a junk file and an empty template, all behind a stubbed picker."""
     p.eval(STUB_HANDLE, await_promise=False)
     p.eval("""(async()=>{
-      window.__a = window.__mkHandle('vault-A.html',
-        buildVaultHtml(await encryptText(%s,%s)));
-      window.__b = window.__mkHandle('vault-B.html',
+      window.__a = window.__mkHandle('vault-A.txt',
+        buildVaultText(await encryptText(%s,%s)));
+      window.__b = window.__mkHandle('vault-B.txt',
+        buildVaultText(await encryptText(%s,%s)));
+      window.__bundle = window.__mkHandle('shared-copy.html',
         buildVaultHtml(await encryptText(%s,%s)));
       window.__junk  = window.__mkHandle('tax-return-2025.html','<html><body>not a vault</body></html>');
       window.__empty = window.__mkHandle('blank-template.html', PRISTINE);
@@ -30,6 +35,7 @@ def _setup(p):
       window.showSaveFilePicker = async o => { window.__savePrompts++;
         window.__suggested = o && o.suggestedName; return window.__mkHandle('chosen.html'); };
       return 1;})()""" % (json.dumps(TEXT_A), json.dumps(PWA),
+                          json.dumps(TEXT_B), json.dumps(PWB),
                           json.dumps(TEXT_B), json.dumps(PWB)))
 
 
@@ -51,8 +57,8 @@ def run(r):
     with Page() as p:
         _setup(p)
         _open(p, "window.__a", PWA)
-        r.equal("a successful open adopts the file it opened", _handle_name(p), "vault-A.html")
-        r.equal("and shows it in the header", p.eval("fileName", False), "vault-A.html")
+        r.equal("a successful open adopts the .txt it opened", _handle_name(p), "vault-A.txt")
+        r.equal("and shows it in the header", p.eval("fileName", False), "vault-A.txt")
 
         # --- every early exit must leave the handle alone --------------------
         p.eval("window.__pick = window.__b; window.__op = doOpen();", False)
@@ -60,7 +66,7 @@ def run(r):
         p.click("#openCancel")
         p.eval("(async()=>{ await window.__op; })()")
         r.equal("cancelling the password prompt keeps the open document's handle",
-                _handle_name(p), "vault-A.html")
+                _handle_name(p), "vault-A.txt")
 
         p.eval("window.__pick = window.__b; window.__op = doOpen();", False)
         p.wait("document.getElementById('openDialog').open")
@@ -70,18 +76,18 @@ def run(r):
         p.wait("document.getElementById('openDialog').open")
         p.click("#openCancel")
         p.eval("(async()=>{ await window.__op; })()")
-        r.equal("a wrong password then cancel keeps the handle", _handle_name(p), "vault-A.html")
+        r.equal("a wrong password then cancel keeps the handle", _handle_name(p), "vault-A.txt")
 
         p.eval("window.__pick = window.__junk;", False)
         p.eval("(async()=>{ await doOpen(); })()")
         r.equal("picking a file that is not a vault keeps the handle",
-                _handle_name(p), "vault-A.html")
+                _handle_name(p), "vault-A.txt")
         r.check("and says so distinctly",
                 "no encrypted payload" in p.eval("document.getElementById('toast').textContent", False))
 
         p.eval("window.__pick = window.__empty;", False)
         p.eval("(async()=>{ await doOpen(); })()")
-        r.equal("picking an empty template keeps the handle", _handle_name(p), "vault-A.html")
+        r.equal("picking an empty template keeps the handle", _handle_name(p), "vault-A.txt")
         r.check("and reports it as empty rather than as a bad password",
                 "empty" in p.eval("document.getElementById('toast').textContent", False))
 
@@ -97,8 +103,21 @@ def run(r):
                 not wrote["b"] and not wrote["junk"])
         r.equal("an in-place save opens no picker", wrote["prompts"], 0)
         r.equal("what it wrote round-trips",
-                p.eval("(async()=>await decryptBytes(extractPayload(window.__a.written).bytes,%s))()"
-                       % json.dumps(PWA)), TEXT_A + " edited")
+                p.eval("(async()=>await decryptBytes(payloadFrom(new TextEncoder().encode("
+                       "window.__a.written)).bytes,%s))()" % json.dumps(PWA)), TEXT_A + " edited")
+        r.check("and what it wrote is the armoured .txt, not an HTML bundle",
+                p.eval("window.__a.written.startsWith('CraigVault encrypted document')", False))
+
+        # --- an HTML bundle opens but is never adopted as the save target ------
+        _open(p, "window.__bundle", PWB)
+        r.equal("opening a shared .html bundle shows its name", p.eval("fileName", False), "shared-copy.html")
+        r.equal("but does not adopt it as the save target", _handle_name(p), None)
+        p.eval("window.__savePrompts = 0;", False)
+        p.eval("(async()=>{ await doSave(false); })()")
+        p.wait("!busy")
+        r.equal("so Save prompts for a new file", p.eval("window.__savePrompts", False), 1)
+        r.equal("and suggests the same name as .txt", p.eval("window.__suggested", False), "shared-copy.txt")
+        r.check("leaving the bundle untouched", not p.eval("!!window.__bundle.written", False))
 
         # --- Save As must still prompt even with a live handle ---------------
         p.eval("window.__savePrompts = 0;", False)
@@ -127,8 +146,8 @@ def run(r):
         p.eval("(async()=>{ await doSave(false); })()")
         p.wait("!busy")
         r.equal("saving it opens a picker", p.eval("window.__savePrompts", False), 1)
-        r.equal("and suggests the same name as .html", p.eval("window.__suggested", False),
-                "old-notes.html")
+        r.equal("and suggests the same name as .txt", p.eval("window.__suggested", False),
+                "old-notes.txt")
         r.check("the original .sectxt is left untouched",
                 not p.eval("!!window.__leg.written", False))
 
@@ -144,12 +163,12 @@ def run(r):
                "  if (this.onchange) this.onchange(); };"
                "HTMLAnchorElement.prototype.click = function(){ window.__downloaded = this.download; };",
                False)
-        p.eval("(async()=>{ window.__feed = new File([window.__b.reads],'vault-B.html',"
-               "{type:'text/html'}); window.__op = doOpen(); })()", False)
+        p.eval("(async()=>{ window.__feed = new File([window.__b.reads],'vault-B.txt',"
+               "{type:'text/plain'}); window.__op = doOpen(); })()", False)
         p.wait("document.getElementById('openDialog').open")
         p.click("#openCancel")
         p.eval("(async()=>{ await window.__op; })()")
-        r.equal("a cancelled fallback open keeps the handle", _handle_name(p), "vault-A.html")
+        r.equal("a cancelled fallback open keeps the handle", _handle_name(p), "vault-A.txt")
 
         p.eval("window.__op = doOpen();", False)
         p.wait("document.getElementById('openDialog').open")
@@ -158,12 +177,12 @@ def run(r):
                % json.dumps(PWB), False)
         p.eval("(async()=>{ await window.__op; })()")
         r.equal("a successful fallback open clears the handle (there is none)", _handle_name(p), None)
-        r.equal("and names the file it opened", p.eval("fileName", False), "vault-B.html")
+        r.equal("and names the file it opened", p.eval("fileName", False), "vault-B.txt")
 
         p.eval("(async()=>{ await doSave(false); })()")
         p.wait("!busy")
         r.equal("saving on the fallback path downloads under the right name",
-                p.eval("window.__downloaded", False), "vault-B.html")
+                p.eval("window.__downloaded", False), "vault-B.txt")
         r.check("and never writes through a handle", not p.eval("!!window.__a.written", False))
 
     # --- naming rule ---------------------------------------------------------

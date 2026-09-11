@@ -1,6 +1,6 @@
 # CraigVault
 
-A password-protected text editor that runs entirely in one HTML file — **including your data**. Saving writes a new HTML file that carries both the editor and your notes as AES-256-GCM ciphertext. Double-click it later and it asks for your password. No server, no account, no build step, no dependencies.
+A password-protected text editor that runs entirely in one HTML file. Saving writes your notes as AES-256-GCM ciphertext to an ordinary `.txt` — plain text on the outside, unreadable without the password on the inside. A self-contained `.html` vault that carries the editor *and* the notes together still opens, and is how you hand a document to someone who doesn't have the app. No server, no account, no build step, no dependencies.
 
 ```
 open index.html   # that's the whole install
@@ -18,6 +18,7 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 - **Authenticated** — a modified file fails to decrypt rather than yielding garbage
 - **Idle auto-lock** (off / 1 / 5 / 15 minutes) that wipes plaintext from the DOM, re-encrypts unsaved edits in memory, and discards the key — unlocking derives it from your password again
 - **Manual lock** with `Ctrl+L`, showing a ciphertext-style wall instead of your text — available even before the first save, which asks for a password so there is a key to lock with
+- **Encrypted `.txt` files** — the document of record: genuinely text, pasteable into an email, readable only by CraigVault with the password
 - **Self-contained vaults** — one `.html` holds the app and the encrypted document; double-click to open
 - **File System Access API** support for true in-place saves, with a download fallback on browsers that lack it
 - Keyboard shortcuts: `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+O` open, `Ctrl+L` lock
@@ -27,17 +28,15 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 
 ## Usage
 
-`index.html` is the **blank template**. Each vault you save is a standalone copy of it with your data inside.
+`index.html` is the app. Your documents are encrypted `.txt` files beside it.
 
 1. Open `index.html` in a modern browser (Chrome, Edge, and other Chromium browsers get in-place saving; Firefox and Safari fall back to downloads).
 2. Type. Nothing touches disk until you save.
-3. On first save you set a password and choose where to write the vault, e.g. `notes.html`. That password encrypts the document — **there is no recovery if you forget it.**
-4. **Double-click `notes.html` any time after that.** It opens locked, asks for the password, and your text comes back.
-5. Edit and save again to write the vault back over itself.
+3. On first save you set a password and choose where to write the file, e.g. `notes.txt`. That password encrypts the document — **there is no recovery if you forget it.**
+4. Next time, **Open** (`Ctrl+O`) `notes.txt`, enter the password, and your text comes back. Saving then writes straight back to it.
+5. A `.txt` opened in any other editor shows a short note explaining what it is, then the ciphertext.
 
-A page cannot be handed a file handle to itself, so the first save of each session opens the file picker — point it at the vault you opened and confirm the overwrite. After that, saving is silent for the rest of the session. On Firefox, and in embedded views like VS Code's Simple Browser, every save downloads a fresh copy that you replace by hand.
-
-Because a vault carries its own copy of the editor, updating `index.html` does not update vaults you already saved. To move an old vault onto a newer editor, open it from a fresh template with **Open** and save it again.
+A self-contained `.html` vault — the app and a document in one file — opens the same way, or by double-clicking it, which boots straight into a password prompt. Saving after that writes a *new* `.txt` beside it rather than back into the bundle, so the bundle is never silently changed. On Firefox, and in embedded views like VS Code's Simple Browser, every save downloads a fresh copy that you replace by hand.
 
 Tests live in [tests/](tests/) — `python3 tests/run.py` drives a real headless browser against `index.html`. They need Chrome and `websocket-client`; the vault itself still has no dependencies.
 
@@ -49,13 +48,28 @@ python3 -m http.server 8000   # then visit http://localhost:8000
 
 ## File format
 
-A vault is an ordinary HTML file. The encrypted document sits in an inert `<script>` element between two marker comments:
+A saved document is an ordinary text file: a short plain-English preamble, then the encrypted payload as base64 between two markers.
+
+```
+CraigVault encrypted document
+
+This file is encrypted with AES-256-GCM. Opening it here shows you nothing
+useful: open it with CraigVault and enter the password it was saved with.
+…
+-----BEGIN CRAIGVAULT-----
+U0VDVFhUMgEPCAG1wH6VnXrhhR4ig4/wOI1+q9kccqf/aER634pMiM26…
+-----END CRAIGVAULT-----
+```
+
+Only what lies between the markers is read, so the block survives being pasted into an email or a chat message and extracted back out.
+
+A self-contained vault is an ordinary HTML file carrying the same payload. It sits in an inert `<script>` element between two marker comments:
 
 ```html
 <!--CRAIGVAULT:BEGIN--><script id="vault" type="text/plain">BASE64…</script><!--CRAIGVAULT:END-->
 ```
 
-Empty content means a blank template. The base64 decodes to this payload:
+Empty content means a blank template. In either container the base64 decodes to this payload:
 
 | Offset | Size     | Contents                            |
 | ------ | -------- | ----------------------------------- |
@@ -80,9 +94,9 @@ Because the parameters live in the file rather than in the code, raising the cos
 
 Files with the `SECTXT1` magic — written before the move to scrypt, using PBKDF2 at 600,000 iterations — still open. Saving one rewrites it as `SECTXT2`, so a vault upgrades itself the first time you save it. Nothing to do by hand.
 
-Saving splices only the region between those markers into a copy of the page source captured **before the app touched the DOM**, then re-extracts the payload and byte-compares it before writing. Everything outside the markers is therefore identical to the file you opened, and a save that cannot verify itself does not happen.
+Building a vault splices only the region between those markers into a copy of the page source captured **before the app touched the DOM**, then re-extracts the payload and byte-compares it before writing. Everything outside the markers is therefore identical to the template, and a file that cannot verify itself is never written. The `.txt` writer verifies itself the same way.
 
-Legacy `.sectxt` files — the raw payload, from before the data moved into the HTML — still open. Saving one produces a *new* `.html` vault and leaves the original `.sectxt` untouched, so importing is never destructive.
+Legacy `.sectxt` files — the raw payload bytes with no wrapper at all — still open. Saving one produces a *new* `.txt` and leaves the original `.sectxt` untouched, so importing is never destructive. The same is true of an `.html` vault: opening it never makes it the save target.
 
 ## Security notes
 

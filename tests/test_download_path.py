@@ -39,7 +39,7 @@ def run(r):
         p.eval("(async()=>{ await doSave(false); })()")
         p.wait("!busy")
 
-        r.equal("the download was attempted", p.eval("window.__downloaded", False), "vault.html")
+        r.equal("the download was attempted, as a .txt", p.eval("window.__downloaded", False), "vault.txt")
         r.check("dirty clears, so the app stays usable", not p.eval("dirty", False))
         r.check("but the save is recorded as unverified", p.eval("unverified", False))
         r.check("the message says delivery cannot be confirmed",

@@ -42,7 +42,7 @@ def run(r):
         r.check("the editor is writable again afterwards", not p.eval("editor.readOnly", False))
         r.equal("what reached the file matches what is on screen",
                 p.eval("(async()=>await decryptBytes("
-                       "extractPayload(window.__saveTarget.written).bytes,%s))()" % json.dumps(PW)),
+                       "payloadFrom(new TextEncoder().encode(window.__saveTarget.written)).bytes,%s))()" % json.dumps(PW)),
                 p.eval("editor.value", False))
         r.check("dirty is cleared, and truthfully", not p.eval("dirty", False))
 
@@ -86,5 +86,5 @@ def run(r):
         r.check("an unraced save still clears dirty", not p.eval("dirty", False))
         r.equal("and writes exactly what is on screen",
                 p.eval("(async()=>await decryptBytes("
-                       "extractPayload(window.__saveTarget.written).bytes,%s))()" % json.dumps(PW)),
+                       "payloadFrom(new TextEncoder().encode(window.__saveTarget.written)).bytes,%s))()" % json.dumps(PW)),
                 p.eval("editor.value", False))

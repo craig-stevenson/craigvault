@@ -754,15 +754,17 @@ async function doSave(as=false){
   let justBlocked = false;
   try{
     const bytes = await encryptText(editor.value, password, setProgress);
-    // built and verified BEFORE any picker or write: a vault that can't prove itself is never offered
-    const html = buildVaultHtml(bytes);
+    // Built and verified BEFORE any picker or write: a file that can't prove itself is never offered.
+    // Save writes the armoured .txt — the document of record. The self-contained HTML bundle is
+    // what Share produces, deliberately, for someone who doesn't have the app.
+    const text = buildVaultText(bytes);
 
     let handle = null;
     if (hasFS && !fsBlocked){
       try{
         handle = (fileHandle && !as) ? fileHandle : await window.showSaveFilePicker({
-          suggestedName: htmlNameFor(fileName),
-          types:[{description:"CraigVault vault", accept:{"text/html":[".html"]}}]
+          suggestedName: txtNameFor(fileName),
+          types:[{description:"CraigVault encrypted text", accept:{"text/plain":[".txt"]}}]
         });
       }catch(e){
         if (e.name === "AbortError") return;          // user cancelled — leave every bit of state alone
@@ -773,16 +775,16 @@ async function doSave(as=false){
 
     if (handle){
       const w = await handle.createWritable();
-      await w.write(html); await w.close();
+      await w.write(text); await w.close();
       fileHandle = handle;                  // only record a target we actually wrote to
       fileName = handle.name;
       unverified = false;                   // a completed write is proof; a download is not
       setDirty(false);
       flash("Encrypted and saved to " + fileName + ".", "ok");
     } else {
-      const name = htmlNameFor(fileName);
+      const name = txtNameFor(fileName);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([html],{type:"text/html"}));
+      a.href = URL.createObjectURL(new Blob([text],{type:"text/plain"}));
       a.download = name;
       a.click(); URL.revokeObjectURL(a.href);
       fileName = name;                    // the download path used to leave this as "untitled"
@@ -854,8 +856,10 @@ async function doOpen(){
       // Adopt the save target only now. Every exit above — cancelled prompt, wrong password, not a
       // vault, empty vault — must leave fileHandle on whatever document is still open, or an
       // ordinary Save would silently overwrite a file the user only browsed to (issue #2).
-      // A legacy .sectxt is imported, never written back to: saving it produces a new .html.
-      fileHandle = isHtml(name) ? pickedHandle : null;
+      // Only a .txt is adopted as the save target. An HTML bundle or a legacy .sectxt is imported,
+      // never written back to: Save writes a new .txt beside it, and Share re-creates a bundle
+      // deliberately. Adopting either would put two documents behind one handle — issue #2 again.
+      fileHandle = isTxt(name) ? pickedHandle : null;
       unverified = false;                   // opening it is proof that it exists
       editor.value = text; locked = false; lockedBlob = null;
       hideLock(); setDirty(false); resetIdle(); editor.focus();

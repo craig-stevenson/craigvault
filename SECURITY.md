@@ -18,7 +18,7 @@ Out of scope (documented limits, not bugs — see the security notes in the READ
 - Weak user-chosen passwords. CraigVault warns when a new password is under 12 characters and explains why, but it will not refuse one: the file is yours. What you choose after being told is out of scope; *misinforming* you about that choice is not (see In scope, above).
 - The `SECTXT2` header, and the HTML shell around it, identifying a file as a CraigVault vault
 - The ~0.25s unlock delay: it is the cost that makes offline guessing expensive, and is meant to be felt
-- The app and the encrypted document living in one file: opening a vault runs the editor stored inside it, so treat an untrusted vault as you would any untrusted HTML
+- A self-contained `.html` vault carrying the app and the encrypted document together: opening one runs the editor stored inside it, so treat an untrusted vault as you would any untrusted HTML. An encrypted `.txt` carries no code.
 
 ## Supported versions
 
