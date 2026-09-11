@@ -470,11 +470,53 @@ function buildVaultHtml(bytes){
   return html;
 }
 
-// What did we just open? A legacy raw .sectxt, a vault .html, or neither.
+/* ---- the armoured text container (.txt) ----
+   The same payload bytes as a vault, base64 between plain-text markers, so the file is genuinely
+   text: it survives being pasted into an email or a chat, and the preamble above the markers
+   explains the file to anyone who opens it in Notepad instead. Only what sits between the markers
+   is read, so the preamble is free to say whatever helps — but it must never contain T_BEGIN. */
+const T_BEGIN = "-----BEGIN CRAIGVAULT-----", T_END = "-----END CRAIGVAULT-----";
+const T_PREAMBLE = [
+  "CraigVault encrypted document",
+  "",
+  "This file is encrypted with AES-256-GCM. Opening it here shows you nothing",
+  "useful: open it with CraigVault and enter the password it was saved with.",
+  "If someone sent you this file, ask them for the password. It is not stored",
+  "anywhere in it.",
+  "",
+  "There is no password recovery. Do not edit below this line.",
+  "",
+  "",
+].join("\n");
+
+function extractArmoured(text){
+  const i = text.indexOf(T_BEGIN), j = text.indexOf(T_END);
+  if (i < 0 || j < i) return {markers:false, bytes:null};
+  const b64 = text.slice(i + T_BEGIN.length, j).trim();
+  if (!b64) return {markers:true, bytes:null};
+  try{ return {markers:true, bytes:b64decode(b64)}; }
+  catch(_){ return {markers:true, bytes:null}; }
+}
+
+// Verified before it is offered, exactly as buildVaultHtml is: a file that can't prove itself
+// is never written.
+function buildVaultText(bytes){
+  const text = T_PREAMBLE + T_BEGIN + "\n" + b64encode(bytes) + "\n" + T_END + "\n";
+  const back = extractArmoured(text).bytes;
+  if (!back || back.length !== bytes.length || back.some((b,k)=>b !== bytes[k]))
+    throw new Error("text verification failed — nothing written");
+  return text;
+}
+
+// What did we just open? A legacy raw .sectxt, a vault .html, an armoured .txt, or none of them.
+// Every one of these is a permanent read path.
 function payloadFrom(bytes){
   if (hasMagic(bytes, MAGIC2) || hasMagic(bytes, MAGIC1))
     return {markers:true, bytes};                      // a raw .sectxt payload, either version
-  return extractPayload(new TextDecoder().decode(bytes));
+  const text = new TextDecoder().decode(bytes);
+  const html = extractPayload(text);
+  if (html.markers) return html;                       // a vault .html (possibly an empty template)
+  return extractArmoured(text);                        // an armoured .txt, or not ours at all
 }
 
 /* ================= app state ================= */
@@ -692,13 +734,14 @@ function hideReveal(input, btn){
   });
 
 /* ================= file ops ================= */
-// A vault is always written as .html. Name it after the file it came from, so importing
-// old-notes.sectxt suggests old-notes.html rather than discarding the name; a document that was
-// never saved has no name to keep and falls back to vault.html.
+// Name an output after the file it came from, so old-notes.sectxt becomes old-notes.txt rather
+// than losing its name; a document that was never saved has no name to keep and falls back to
+// "vault". One rule for both pickers and both download names, so the paths cannot drift apart.
 const isHtml = n => /\.html$/i.test(n);
-const htmlNameFor = n => isHtml(n) ? n
-  : n === "untitled" ? "vault.html"
-  : n.replace(/\.[^./\\]*$/, "") + ".html";
+const isTxt  = n => /\.txt$/i.test(n);
+const stem   = n => n === "untitled" ? "vault" : n.replace(/\.[^./\\]*$/, "");
+const txtNameFor  = n => isTxt(n)  ? n : stem(n) + ".txt";
+const htmlNameFor = n => isHtml(n) ? n : stem(n) + ".html";
 
 async function doSave(as=false){
   if (locked || busy) return;
@@ -768,7 +811,7 @@ async function doOpen(){
     if (hasFS && !fsBlocked){
       try{
         [picked] = await window.showOpenFilePicker({
-          types:[{description:"CraigVault vault", accept:{"text/html":[".html"], "application/octet-stream":[".sectxt"]}}]
+          types:[{description:"CraigVault document", accept:{"text/plain":[".txt"], "text/html":[".html"], "application/octet-stream":[".sectxt"]}}]
         });
       }catch(e){
         if (e.name === "AbortError") return;          // user cancelled
@@ -781,7 +824,7 @@ async function doOpen(){
       bytes = new Uint8Array(await f.arrayBuffer());
       name = f.name; pickedHandle = picked;
     } else {
-      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".html,.sectxt";
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".txt,.html,.sectxt";
       const f = await new Promise(res=>{ inp.onchange = ()=>res(inp.files[0]); inp.click(); });
       if (!f) return;
       bytes = new Uint8Array(await f.arrayBuffer());
@@ -789,11 +832,11 @@ async function doOpen(){
     }
   }catch(e){ if (e.name !== "AbortError") flash("Open failed: " + e.message, "err"); return; }
 
-  // a vault .html, a legacy .sectxt, or neither — decided before we bother asking for a password
+  // a .txt, a vault .html, a legacy .sectxt, or none of them — decided before asking for a password
   const found = payloadFrom(bytes);
   if (!found.bytes){
     flash(found.markers
-      ? "That vault is empty — there is nothing in it to open."
+      ? "That file is empty — there is nothing in it to open."
       : "Not a CraigVault file — no encrypted payload found.", "err");
     return;
   }

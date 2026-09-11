@@ -24,6 +24,7 @@ if not sys.stdout.isatty():
 
 ORDER = [
     "test_container.py",        # the property that must never regress, and the format
+    "test_txt_format.py",       # the armoured .txt container
     "test_lock_state.py",       # issue #1
     "test_file_targets.py",     # issue #2
     "test_editor_lock.py",      # issue #3
