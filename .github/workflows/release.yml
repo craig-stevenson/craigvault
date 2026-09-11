@@ -22,8 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          fetch-tags: true     # the annotated tag's message becomes the top of the release notes
+          fetch-depth: 0       # --generate-notes wants history; the tag object is fetched explicitly below
 
       - name: The tag must match the version inside the file
         run: |
@@ -48,6 +47,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # actions/checkout leaves the tag peeled to its commit, so %(contents) would print the
+          # commit message instead of the release summary (that is exactly what v1.0.0's notes did
+          # on first publish). Fetch the tag object itself, and insist that there is one.
+          git fetch --force --no-tags origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != "tag" ]; then
+            echo "::error::${GITHUB_REF_NAME} is a lightweight tag — release tags must be annotated (git tag -a) so the message becomes the notes"
+            exit 1
+          fi
           summary="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
           gh release create "$GITHUB_REF_NAME" craigvault.html SHA256SUMS \
             --title "CraigVault $GITHUB_REF_NAME" \
