@@ -32,6 +32,7 @@ ORDER = [
     "test_password_policy.py",  # issue #5
     "test_locked_ui.py",        # issue #8
     "test_download_path.py",    # issue #6
+    "test_share.py",            # the shared HTML copy
 ]
 
 

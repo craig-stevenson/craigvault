@@ -22,6 +22,9 @@
   .brand svg{flex:none}
   .spacer{flex:1}
   .actions{display:flex;align-items:center;gap:8px}
+  /* three clusters — document, outbound, session — so Share is reachable but never adjacent to Save */
+  .cluster{display:flex;align-items:center;gap:8px}
+  .cluster+.cluster{border-left:1px solid var(--line);padding-left:10px;margin-left:2px}
   button{font-family:var(--ui);font-size:13px;color:var(--text);background:var(--panel-2);border:1px solid var(--line);
     border-radius:4px;padding:6px 12px;cursor:pointer}
   button:hover{border-color:var(--brass);color:var(--brass-hi)}
@@ -113,6 +116,8 @@
     .actions{order:3;flex-wrap:wrap;gap:8px;width:100%}
     .actions button{flex:1 1 auto}
     .actions select{flex:1 1 100%}
+    .cluster{flex:1 1 100%;flex-wrap:wrap}
+    .cluster+.cluster{border-left:0;padding-left:0;margin-left:0;border-top:1px solid var(--line);padding-top:8px}
     footer .spec{display:none}
   }
   @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
@@ -130,10 +135,16 @@
   <span id="fname" class="filename">untitled</span>
   <div class="spacer"></div>
   <div class="actions">
-    <button id="btnNew" title="Start a new document">New</button>
-    <button id="btnOpen" title="Open an encrypted file (Ctrl/⌘+O)">Open</button>
-    <button id="btnSave" class="primary" title="Encrypt and save (Ctrl/⌘+S)">Save</button>
-    <button id="btnSaveAs" title="Encrypt and save to a new file (Ctrl/⌘+Shift+S)">Save as</button>
+    <div class="cluster" role="group" aria-label="Document">
+      <button id="btnNew" title="Start a new document">New</button>
+      <button id="btnOpen" title="Open an encrypted file (Ctrl/⌘+O)">Open</button>
+      <button id="btnSave" class="primary" title="Encrypt and save (Ctrl/⌘+S)">Save</button>
+      <button id="btnSaveAs" title="Encrypt and save to a new file (Ctrl/⌘+Shift+S)">Save as</button>
+    </div>
+    <div class="cluster" role="group" aria-label="Share">
+      <button id="btnShare" title="Create one HTML file holding this note and the editor, for someone without CraigVault">Share…</button>
+    </div>
+    <div class="cluster" role="group" aria-label="Session">
     <button id="btnLock" disabled>Lock now</button>
     <select id="autolock" title="Auto-lock after inactivity">
       <option value="0">Auto-lock: off</option>
@@ -141,6 +152,7 @@
       <option value="300" selected>Auto-lock: 5 min</option>
       <option value="900">Auto-lock: 15 min</option>
     </select>
+    </div>
   </div>
 </header>
 
@@ -155,7 +167,7 @@
         <rect x="4" y="10" width="16" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6"/>
       </svg>
       <h2>LOCKED</h2>
-      <p>Your document is held only as AES-256-GCM ciphertext until you unlock it.</p>
+      <p>This document is held only as AES-256-GCM ciphertext until it is unlocked.</p>
       <p id="lockMeta" class="meta"></p>
       <form id="unlockForm">
         <span class="pwfield">
@@ -170,7 +182,8 @@
       </form>
       <span id="capsUnlock" class="caps" role="status"></span>
       <div id="unlockErr" class="err" role="alert"></div>
-      <p class="caption">The pattern behind this card is illustrative, not your file's bytes.</p>
+      <p class="caption">Enter the password it was saved with. If someone sent you this file, ask them for the password — it is not stored anywhere in it.</p>
+      <p class="caption">CraigVault · everything happens inside this file, in your browser. Nothing is sent anywhere. The pattern behind this card is illustrative, not your file's bytes.</p>
     </div>
   </div>
 </main>
@@ -189,7 +202,7 @@
   <h2 id="pwTitle">SET PASSWORD</h2>
   <p id="pwHint">This password encrypts the file. There is no recovery if you forget it.</p>
   <form method="dialog" id="pwForm">
-    <label for="pw1">Password</label>
+    <label for="pw1" id="pw1Label">Password</label>
     <span class="pwfield">
       <input type="password" id="pw1" autocomplete="new-password">
       <button type="button" class="reveal" id="revealPw1" aria-pressed="false" aria-label="Show password" title="Show password">
@@ -521,10 +534,10 @@ function payloadFrom(bytes){
 
 /* ================= app state ================= */
 const editor = document.getElementById("editor");
-const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnLock","autolock",
+const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnShare","btnLock","autolock",
   "lockscreen","cipherwall","lockMeta","unlockForm","unlockPw","unlockBtn","unlockErr","revealUnlock","capsUnlock",
   "pip","stateTxt","counts","toast","vault",
-  "pwDialog","pwTitle","pwHint","pwForm","pw1","pw2","pwErr","pwCancel","pwOk","revealPw1","capsPw","meterBar","meterTxt",
+  "pwDialog","pwTitle","pwHint","pwForm","pw1","pw1Label","pw2","pwErr","pwCancel","pwOk","revealPw1","capsPw","meterBar","meterTxt",
   "openDialog","openName","openForm","openPw","openErr","openCancel","openOk","revealOpen","capsOpen",
   "confirmDialog","confirmTitle","confirmBody","confirmForm","confirmCancel","confirmOk"].map(id=>[id,document.getElementById(id)]));
 
@@ -569,9 +582,11 @@ function render(){
     : "Lock now (Ctrl/⌘+L) — you'll be asked to set a password first";
   // A locked session is inert, not merely covered: the lockscreen is an absolutely-positioned
   // div, so anything left enabled behind it stays clickable, tabbable and scriptable (issue #8).
-  for (const b of [els.btnNew, els.btnOpen, els.autolock]) b.disabled = busy || locked;
-  for (const b of [els.btnNew, els.btnOpen])
-    b.title = locked ? "Unlock this document first" : "";
+  for (const b of [els.btnNew, els.btnOpen, els.btnShare]){
+    b.disabled = busy || locked;
+    b.title = locked ? "Unlock this document first" : TITLE_OF.get(b);   // restore, don't blank
+  }
+  els.autolock.disabled = busy || locked;
   // The editor is part of "everything", not an exception to it. A save encrypts a snapshot taken
   // before a ~300ms derivation; leaving the textarea writable meant keystrokes landed after that
   // snapshot and were written nowhere, while dirty was cleared anyway (issue #3). readOnly blocks
@@ -608,22 +623,31 @@ function flash(msg, kind = ""){
 // unlock would lock people out of vaults whose passwords predate the rule.
 const MIN_PW = 12;
 const PW_OK_LABEL = els.pwOk.textContent;   // read from the markup so the two cannot drift
+const PW_HINT_DEFAULT = els.pwHint.textContent, PW_LABEL_DEFAULT = els.pw1Label.textContent;
+const TITLE_OF = new Map([els.btnNew, els.btnOpen, els.btnShare].map(b => [b, b.title]));
+let pwOkCurrent = PW_OK_LABEL;              // what the primary button says for THIS open of the dialog
 let weakAck = false;                        // armed by one submit of a short password; any edit clears it
 // An <input> keeps its value after its dialog closes, so clearing on entry is not enough: the
 // plaintext password would sit in the DOM until the next open. Every exit path wipes instead.
 const wipeField = input => { input.value = ""; };
 
-function askNewPassword(title){
+// opts: {hint, label, okLabel} — Share re-purposes the same dialog with different words. done()
+// restores every default, so the next SET PASSWORD is never wearing Share's clothes.
+function askNewPassword(title, opts = {}){
   return new Promise(resolve=>{
     els.pwTitle.textContent = title;
+    els.pwHint.textContent = opts.hint || PW_HINT_DEFAULT;
+    els.pw1Label.textContent = opts.label || PW_LABEL_DEFAULT;
+    pwOkCurrent = opts.okLabel || PW_OK_LABEL;
     els.pw1.value = els.pw2.value = ""; els.pwErr.textContent = ""; meter("");
-    weakAck = false; els.pwOk.textContent = PW_OK_LABEL;
+    weakAck = false; els.pwOk.textContent = pwOkCurrent;
     hideReveal(els.pw1, els.revealPw1); els.capsPw.classList.remove("show"); els.capsPw.textContent = "";
     els.pwDialog.showModal(); els.pw1.focus();
     const done = val=>{
       els.pwDialog.close(); cleanup();
       wipeField(els.pw1); wipeField(els.pw2); meter("");   // val is already evaluated, so this cannot corrupt it
-      weakAck = false; els.pwOk.textContent = PW_OK_LABEL;  // restore on the way out, not just on the way in
+      weakAck = false; els.pwOk.textContent = pwOkCurrent = PW_OK_LABEL;   // restore on the way out, not just in
+      els.pwHint.textContent = PW_HINT_DEFAULT; els.pw1Label.textContent = PW_LABEL_DEFAULT;
       resolve(val);
     };
     const submit = e=>{
@@ -667,7 +691,7 @@ function meter(v){
   els.meterTxt.textContent = v ? (s <= 1 ? "Weak" : s <= 3 ? "Fair" : "Strong") : "";
 }
 els.pw1.addEventListener("input", e=>{
-  weakAck = false; els.pwOk.textContent = PW_OK_LABEL;   // a changed password gets a fresh warning
+  weakAck = false; els.pwOk.textContent = pwOkCurrent;   // a changed password gets a fresh warning
   meter(e.target.value);
 });
 
@@ -803,6 +827,56 @@ async function doSave(as=false){
     }
   }catch(e){ if (e.name !== "AbortError") flash("Save failed: " + e.message, "err"); }
   finally{ busy = false; render(); resetIdle(); }   // resetIdle here arms auto-lock right after the first save
+}
+
+// Share: the app and this document in one HTML file, for someone who doesn't have CraigVault.
+// It is not Save. It writes a different file under its own password, never adopts the save target,
+// never clears dirty, never marks the document unverified: the .txt is the copy of record and a
+// shared copy is a snapshot of it. It obeys lock and busy exactly like every other entry point.
+async function doShare(){
+  if (locked || busy) return;
+  // Its own password, always — never the document's. Reusing a vault password for a copy you send
+  // away hands the recipient the key to every other file protected with it, and nobody would notice.
+  const pw = await askNewPassword("SHARE A COPY", {
+    hint: "Creates one HTML file holding this note and the editor itself, so whoever you send it to "
+        + "doesn't need CraigVault. Send the password separately from the file — not in the same message.",
+    label: "Password for the recipient",
+    okLabel: "Create file",
+  });
+  if (pw === null) return;
+  busy = true; progress = -1; render();
+  let justBlocked = false;
+  try{
+    const html = buildVaultHtml(await encryptText(editor.value, pw, setProgress));
+    let handle = null;
+    if (hasFS && !fsBlocked){
+      try{
+        handle = await window.showSaveFilePicker({
+          suggestedName: htmlNameFor(fileName),
+          types:[{description:"CraigVault shared copy", accept:{"text/html":[".html"]}}]
+        });
+      }catch(e){
+        if (e.name === "AbortError") return;          // cancelled — nothing written, nothing changed
+        if (!pickerRefused(e)) throw e;
+        fsBlocked = justBlocked = true;
+      }
+    }
+    // Nothing about the document changes below this line. If it has unsaved edits, say so: the
+    // one thing Share must never do is look like a save.
+    const stale = dirty ? " Your document itself still has unsaved changes." : "";
+    if (handle){
+      const w = await handle.createWritable(); await w.write(html); await w.close();
+      flash("Created " + handle.name + " — send the password separately." + stale, "ok");
+    } else {
+      const name = htmlNameFor(fileName);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([html],{type:"text/html"}));
+      a.download = name; a.click(); URL.revokeObjectURL(a.href);
+      flash("Downloaded " + name + (justBlocked ? " (in-place saving isn't available in this view)" : "")
+        + " — send the password separately." + stale, "ok");
+    }
+  }catch(e){ if (e.name !== "AbortError") flash("Share failed: " + e.message, "err"); }
+  finally{ busy = false; render(); resetIdle(); }
 }
 
 async function doOpen(){
@@ -968,6 +1042,7 @@ els.btnOpen.addEventListener("click", doOpen);
 els.btnSave.addEventListener("click", ()=>doSave(false));
 els.btnSaveAs.addEventListener("click", ()=>doSave(true));
 els.btnLock.addEventListener("click", doLock);
+els.btnShare.addEventListener("click", doShare);      // no shortcut: deliberate, rare, consequential
 editor.addEventListener("input", ()=>{ setDirty(true); });
 
 // the editor is capped to a reading measure, so the margin beside it must still focus it

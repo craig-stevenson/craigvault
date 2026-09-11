@@ -19,9 +19,9 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 - **Idle auto-lock** (off / 1 / 5 / 15 minutes) that wipes plaintext from the DOM, re-encrypts unsaved edits in memory, and discards the key — unlocking derives it from your password again
 - **Manual lock** with `Ctrl+L`, showing a ciphertext-style wall instead of your text — available even before the first save, which asks for a password so there is a key to lock with
 - **Encrypted `.txt` files** — the document of record: genuinely text, pasteable into an email, readable only by CraigVault with the password
-- **Self-contained vaults** — one `.html` holds the app and the encrypted document; double-click to open
+- **Share** — one click makes a self-contained `.html` holding the app and this document under its own password, for someone who doesn't have CraigVault; double-click to open
 - **File System Access API** support for true in-place saves, with a download fallback on browsers that lack it
-- Keyboard shortcuts: `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+O` open, `Ctrl+L` lock
+- Keyboard shortcuts: `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+O` open, `Ctrl+L` lock — Share has none on purpose
 - Length-based password strength meter that warns, once and with a reason, below 12 characters — and never refuses a password you insist on
 - Unsaved-changes guard, no telemetry of any kind
 - The editor goes read-only for the moment a save or lock is encrypting, so nothing you type can be quietly left out of the file
@@ -35,8 +35,9 @@ Most "secure notes" apps ask you to trust a service. CraigVault has nothing to t
 3. On first save you set a password and choose where to write the file, e.g. `notes.txt`. That password encrypts the document — **there is no recovery if you forget it.**
 4. Next time, **Open** (`Ctrl+O`) `notes.txt`, enter the password, and your text comes back. Saving then writes straight back to it.
 5. A `.txt` opened in any other editor shows a short note explaining what it is, then the ciphertext.
+6. To hand a document to someone who doesn't have CraigVault, click **Share…**. It asks for a password *for them* — never your own — and writes one `.html` holding the app and the document together. **Send the file and the password separately.** Double-clicking that file boots straight into a password prompt that tells them what it is and where the password comes from.
 
-A self-contained `.html` vault — the app and a document in one file — opens the same way, or by double-clicking it, which boots straight into a password prompt. Saving after that writes a *new* `.txt` beside it rather than back into the bundle, so the bundle is never silently changed. On Firefox, and in embedded views like VS Code's Simple Browser, every save downloads a fresh copy that you replace by hand.
+Sharing is not saving: the `.txt` is your document, and a shared copy is a snapshot of it. Share never changes which file Save writes to, and if you share with unsaved edits it says so. Opening a shared `.html` yourself works the same as any vault — saving afterwards writes a *new* `.txt` beside it rather than back into the bundle, so a bundle is never silently changed. On Firefox, and in embedded views like VS Code's Simple Browser, every save downloads a fresh copy that you replace by hand.
 
 Tests live in [tests/](tests/) — `python3 tests/run.py` drives a real headless browser against `index.html`. They need Chrome and `websocket-client`; the vault itself still has no dependencies.
 

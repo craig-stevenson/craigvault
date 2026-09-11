@@ -19,6 +19,7 @@ Out of scope (documented limits, not bugs — see the security notes in the READ
 - The `SECTXT2` header, and the HTML shell around it, identifying a file as a CraigVault vault
 - The ~0.25s unlock delay: it is the cost that makes offline guessing expensive, and is meant to be felt
 - A self-contained `.html` vault carrying the app and the encrypted document together: opening one runs the editor stored inside it, so treat an untrusted vault as you would any untrusted HTML. An encrypted `.txt` carries no code.
+- How a shared copy's password reaches the recipient. Share insists on a password of its own rather than reusing yours, and tells you to send it separately from the file, but the channel you choose is outside the app.
 
 ## Supported versions
 
