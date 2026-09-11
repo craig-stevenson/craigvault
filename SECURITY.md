@@ -2,9 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately rather than opening a public issue. Use GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) on this repository ("Security" tab → "Report a vulnerability").
+Please report security issues using a public issue.
 
-Include what you can: affected browser and version, reproduction steps, and the impact you believe the issue has. Expect an initial response within a week or so — this is a hobby project maintained in spare time, so please be patient.
+Include what you can: affected browser and version, reproduction steps, and the impact you believe the issue has.
 
 ## Scope
 
