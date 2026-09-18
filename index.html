@@ -42,7 +42,7 @@
 
   /* ---------- editor ---------- */
   main{flex:1;display:flex;position:relative;min-height:0}
-  textarea{flex:1;width:100%;max-width:90ch;margin:0 auto;resize:none;border:0;background:var(--bg);color:var(--text);
+  textarea{flex:1;width:100%;max-width:90ch;margin:0;resize:none;border:0;background:var(--bg);color:var(--text);
     font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px;caret-color:var(--brass-hi)}
   textarea::placeholder{color:var(--placeholder)}
   textarea:focus{outline:none}
@@ -1049,7 +1049,7 @@ els.btnLock.addEventListener("click", doLock);
 els.btnShare.addEventListener("click", doShare);      // no shortcut: deliberate, rare, consequential
 editor.addEventListener("input", ()=>{ setDirty(true); });
 
-// the editor is capped to a reading measure, so the margin beside it must still focus it
+// the editor is capped to a reading measure and sits at the left, so the empty space to its right must still focus it
 document.querySelector("main").addEventListener("mousedown", e=>{
   if (!locked && e.target.tagName !== "TEXTAREA"){ e.preventDefault(); editor.focus(); }
 });
