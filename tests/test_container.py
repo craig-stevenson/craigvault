@@ -32,6 +32,7 @@ def run(r):
             noOpenDialog: !/<dialog[^>]*\\sopen/.test(html),
             lockMeta: txt('lockMeta'), cipherwall: txt('cipherwall'),
             editor: doc.getElementById('editor').textContent, toast: txt('toast'),
+            gutter: txt('gutter'), mirror: txt('mirror'),
           };})()""" % (json.dumps(CANARY), json.dumps(CANARY)))
 
         r.check("regions outside the markers are byte-identical to PRISTINE",
@@ -39,7 +40,7 @@ def run(r):
         r.check("no plaintext in the written vault", built["noCanary"])
         r.check("no password in the written vault", built["noPassword"])
         r.check("no <dialog open> serialised", built["noOpenDialog"])
-        for field in ("lockMeta", "cipherwall", "editor", "toast"):
+        for field in ("lockMeta", "cipherwall", "editor", "toast", "gutter", "mirror"):
             r.equal("#%s serialises empty" % field, built[field], "")
 
         # --- idempotent after one round-trip ---------------------------------

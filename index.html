@@ -42,8 +42,19 @@
 
   /* ---------- editor ---------- */
   main{flex:1;display:flex;position:relative;min-height:0}
-  textarea{flex:1;width:100%;max-width:90ch;margin:0;resize:none;border:0;background:var(--bg);color:var(--text);
-    font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px;caret-color:var(--brass-hi)}
+  textarea{flex:1;width:100%;min-width:0;margin:0;resize:none;border:0;background:var(--bg);color:var(--text);
+    font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px 22px 12px;caret-color:var(--brass-hi);
+    white-space:pre-wrap;overflow-wrap:break-word;tab-size:8}
+  /* Line numbers. The gutter numbers LOGICAL lines, and a wrapped line spans several rows, so each
+     number is sized to its line's rendered height — measured in .mirror, which must keep exactly the
+     textarea's font, line-height, padding, wrapping and tab-size, or the numbers drift. */
+  .gutter{flex:none;overflow:hidden;font-family:var(--mono);font-size:14px;line-height:1.65;
+    padding:22px 10px 22px 14px;text-align:right;color:#55606c;background:var(--bg);
+    border-right:1px solid var(--line);user-select:none;white-space:pre}
+  .mirror{position:absolute;top:0;left:-200vw;visibility:hidden;pointer-events:none;
+    font-family:var(--mono);font-size:14px;line-height:1.65;padding:22px 26px 22px 12px;
+    white-space:pre-wrap;overflow-wrap:break-word;tab-size:8}
+  .mirror div:empty::before{content:"\200b"}   /* an empty line still occupies one row */
   textarea::placeholder{color:var(--placeholder)}
   textarea:focus{outline:none}
   textarea[readonly]{opacity:.55;cursor:progress}
@@ -157,8 +168,10 @@
 </header>
 
 <main>
+  <div id="gutter" class="gutter" aria-hidden="true"></div>
   <textarea id="editor" spellcheck="false" autocomplete="off"
     placeholder="Type here. Nothing touches disk until you save — and what's saved is AES-256-GCM ciphertext only."></textarea>
+  <div id="mirror" class="mirror" aria-hidden="true"></div>
 
   <div id="lockscreen" class="lockscreen" aria-live="polite">
     <div id="cipherwall" class="cipherwall" aria-hidden="true"></div>
@@ -537,7 +550,7 @@ function payloadFrom(bytes){
 const editor = document.getElementById("editor");
 const els = Object.fromEntries(["fname","btnNew","btnOpen","btnSave","btnSaveAs","btnShare","btnLock","autolock",
   "lockscreen","cipherwall","lockMeta","unlockForm","unlockPw","unlockBtn","unlockErr","revealUnlock","capsUnlock",
-  "pip","stateTxt","counts","toast","vault","spec",
+  "pip","stateTxt","counts","toast","vault","spec","gutter","mirror",
   "pwDialog","pwTitle","pwHint","pwForm","pw1","pw1Label","pw2","pwErr","pwCancel","pwOk","revealPw1","capsPw","meterBar","meterTxt",
   "openDialog","openName","openForm","openPw","openErr","openCancel","openOk","revealOpen","capsOpen",
   "confirmDialog","confirmTitle","confirmBody","confirmForm","confirmCancel","confirmOk"].map(id=>[id,document.getElementById(id)]));
@@ -601,6 +614,34 @@ function render(){
   editor.tabIndex = locked ? -1 : 0;
   // doSave refuses while locked, so don't leave the buttons looking live
   els.btnSave.disabled = els.btnSaveAs.disabled = busy || locked;
+  renderGutter();
+}
+
+// Line numbers. Each logical line gets one number sized to the line's rendered height, so
+// soft-wrapped lines keep the numbers aligned. The heights come from #mirror — a hidden block with
+// the textarea's exact font, width and padding — rendered once per change and read back in a
+// single layout pass. render() calls this, so the gutter tracks every state change, including
+// doLock wiping the editor: after that it shows a lone "1", nothing derived from the plaintext.
+let gutterKey = null;
+function renderGutter(){
+  const lines = editor.value.split("\n");
+  els.gutter.style.width = (Math.max(2, String(lines.length).length) + 2) + "ch";   // set first: it changes the editor's width
+  const key = editor.clientWidth + "\u0000" + editor.value;
+  if (key === gutterKey) return;
+  gutterKey = key;
+  const mirror = document.createDocumentFragment();
+  for (const line of lines){ const d = document.createElement("div"); d.textContent = line; mirror.appendChild(d); }
+  els.mirror.style.width = editor.clientWidth + "px";
+  els.mirror.replaceChildren(mirror);
+  const rows = els.mirror.children, out = document.createDocumentFragment();
+  for (let i = 0; i < rows.length; i++){
+    const d = document.createElement("div");
+    d.textContent = i + 1;
+    d.style.height = rows[i].offsetHeight + "px";    // detached writes, so this stays one reflow
+    out.appendChild(d);
+  }
+  els.gutter.replaceChildren(out);
+  els.gutter.scrollTop = editor.scrollTop;
 }
 
 // scrypt runs on the main thread and calls this once per 2048 ROMix iterations, so it has to
@@ -1047,6 +1088,9 @@ els.btnSave.addEventListener("click", ()=>doSave(false));
 els.btnSaveAs.addEventListener("click", ()=>doSave(true));
 els.btnLock.addEventListener("click", doLock);
 els.btnShare.addEventListener("click", doShare);      // no shortcut: deliberate, rare, consequential
+editor.addEventListener("scroll", ()=>{ els.gutter.scrollTop = editor.scrollTop; }, {passive:true});
+let gutterRaf = 0;   // a resize changes where lines wrap, so the rows have to be measured again
+window.addEventListener("resize", ()=>{ cancelAnimationFrame(gutterRaf); gutterRaf = requestAnimationFrame(renderGutter); });
 editor.addEventListener("input", ()=>{ setDirty(true); });
 
 // the editor is capped to a reading measure and sits at the left, so the empty space to its right must still focus it

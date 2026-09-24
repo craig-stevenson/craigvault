@@ -33,6 +33,7 @@ ORDER = [
     "test_locked_ui.py",        # issue #8
     "test_download_path.py",    # issue #6
     "test_share.py",            # the shared HTML copy
+    "test_editor_gutter.py",    # full-width editor with line numbers
 ]
 
 
